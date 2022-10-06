@@ -471,7 +471,7 @@ class Trainer:
 
         tr_loss = 0.0
         logging_loss = 0.0
-        model.zero_grad()
+        model.zero_grad()   # 모델에 누적된 gradient 제거
         train_iterator = trange(
             epochs_trained, int(num_train_epochs), desc="Epoch", disable=not self.is_local_master()
         )
@@ -614,11 +614,16 @@ class Trainer:
         return self._resolve_loss_item(loss, optimizer)
 
     def generate_span_cutoff_embedding(self, embeds, masks, input_lens):
+        """
+            CUTOFF related codes
+        """
         input_embeds = []
         input_masks = []
         for i in range(embeds.shape[0]):
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
             start = int(torch.rand(1) * (input_lens[i] - cutoff_length))
+            # 시작점(start)을 랜덤으로 설정하고,
+            # slicing을 사용해 그 부분을 아예 zeros로 대체
             cutoff_embed = torch.cat((embeds[i][:start],
                                       torch.zeros([cutoff_length, embeds.shape[-1]],
                                                   dtype=torch.float).to(self.args.device),
@@ -639,13 +644,15 @@ class Trainer:
         for i in range(embeds.shape[0]):
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
             zero_index = torch.randint(input_lens[i], (cutoff_length,))
-
+            
+            # 0으로 대체할 지점의 index를 랜덤으로 생성
             cutoff_embed = embeds[i]
             cutoff_mask = masks[i]
 
             tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
             for ind in zero_index:
                 tmp_mask[ind] = 0
+            # 설정된 index 위치를 0으로 대체
 
             cutoff_embed = torch.mul(tmp_mask[:, None], cutoff_embed)
             cutoff_mask = torch.mul(tmp_mask, cutoff_mask).type(torch.int64)
@@ -705,7 +712,7 @@ class Trainer:
         input_masks = []
         for i in range(embeds.shape[0]):
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
-            start = int(torch.rand(1) * (input_lens[i] - cutoff_length))
+            start = int(torch.rand(1).to(self.args.device) * (input_lens[i] - cutoff_length))
             # print(input_lens[i], cutoff_length, start)
             cutoff_embed = torch.cat((embeds[i][:start],
                                       torch.zeros([cutoff_length, embeds.shape[-1]],
@@ -722,9 +729,11 @@ class Trainer:
         cutoff_outputs = model.get_logits_from_embedding_output(embedding_output=input_embeds,
                                                                 attention_mask=input_masks, labels=labels)
 
+        # 새로 설정한 loss function에 맞게 cross-entropy 항 추가
         if self.args.aug_ce_loss > 0:
             loss += self.args.aug_ce_loss * cutoff_outputs[0]
 
+        # JS divergence loss 항 추가
         if self.args.aug_js_loss > 0:
             assert self.args.n_gpu == 1
             ori_logits = ori_outputs[1]
