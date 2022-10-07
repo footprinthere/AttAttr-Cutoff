@@ -14,6 +14,8 @@ $ ./run_glue {dataset name} {GPU number} {train batch size}
 ```
 
 ## References
-[Cutoff](https://github.com/dinghanshen/Cutoff)
+**Cutoff** [github](https://github.com/dinghanshen/Cutoff)
 
-[AttAttr](https://github.com/YRdddream/attattr)
+**Attention Attribution** [github](https://github.com/YRdddream/attattr)
+
+**Transformer Explainability** [github](https://github.com/hila-chefer/Transformer-Explainability) / [Colab](https://colab.research.google.com/github/hila-chefer/Transformer-Explainability/blob/main/BERT_explainability.ipynb)
