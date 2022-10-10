@@ -1,3 +1,9 @@
+# data
+# glue_data/
+*.tsv
+*.txt
+*.jsonl
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
