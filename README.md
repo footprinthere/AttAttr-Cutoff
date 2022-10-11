@@ -1,8 +1,21 @@
 # Cutoff_with_Attribution
 2022-2 창의적 통합 설계 1 LDI LAB
 
-### virtual environment
+### Activating virtual environment
+```shell
+$ conda activate cutoff   # activate
+$ conda deactivate
 ```
-conda activate cutoff # activate
-conda deactivate
+
+### Training
+```shell
+$ ./run_glue {dataset name} {GPU number} {train batch size}
+# ./run_glue CoLA 0 16
 ```
+
+## References
+**Cutoff** [github](https://github.com/dinghanshen/Cutoff)
+
+**Attention Attribution** [github](https://github.com/YRdddream/attattr)
+
+**Transformer Explainability** [github](https://github.com/hila-chefer/Transformer-Explainability) / [Colab](https://colab.research.google.com/github/hila-chefer/Transformer-Explainability/blob/main/BERT_explainability.ipynb)
