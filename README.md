@@ -9,9 +9,13 @@ $ conda deactivate
 
 ### Training
 ```shell
-$ ./run_glue {dataset name} {GPU number} {train batch size} {cutoff type}
-# ./run_glue CoLA 0 16 token_cutoff
-# cutoff type: span_cutoff, token_cutoff, dim_cutoff
+$ ./run_glue {dataset name} {GPU number} {train batch size}
+# ./run_glue CoLA 0 16
+```
+
+### Cutoff types
+```
+span_cutoff, token_cutoff, dim_cutoff
 ```
 
 ## References
