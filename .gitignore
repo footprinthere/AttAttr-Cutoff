@@ -1,8 +1,5 @@
 # data
-# glue_data/
-*.tsv
-*.txt
-*.jsonl
+glue_data/*/original/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
