@@ -78,7 +78,7 @@ class GlueDataset(Dataset):
         self.output_mode = glue_output_modes[args.task_name]
         # Load data features from cache or dataset file
         cached_features_file = os.path.join(
-            args.data_dir,
+            "/home/jovyan/.cache/torch/transformers/",
             "cached_{}_{}_{}_{}".format(
                 "dev" if evaluate else "train", tokenizer.__class__.__name__, str(args.max_seq_length), args.task_name,
             ),
