@@ -12,3 +12,7 @@ if [[ $USERNAME == "footprinthere" ]]; then
     git config user.email "tai15515@kakao.com"
 fi
 
+if [[ $USERNAME == "symoon9" ]]; then
+    git config --local user.name "symoon9"
+    git config --local user.email "seoyoon5635@gmail.com"
+fi

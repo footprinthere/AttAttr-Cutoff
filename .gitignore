@@ -1,5 +1,6 @@
-# dataset
-glue_data/STS-B/original
+# data and results
+glue_data/
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
