@@ -795,7 +795,7 @@ class Trainer:
         loss = 0.0
 
         assert model.__class__ is RobertaForSequenceClassification
-        # if self.args.aug_version == 'v3':
+        # if self.args.aug_version == 'v3':     # TrainingArgs에 존재하지 않는 argument라 제거함
         input_ids = inputs['input_ids']
         token_type_ids = inputs.get('token_type_ids', None)
         labels = inputs.get('labels', None)
