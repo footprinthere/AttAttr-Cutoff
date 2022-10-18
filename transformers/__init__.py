@@ -269,7 +269,7 @@ if is_torch_available():
     )
     from .trainer import Trainer, set_seed, torch_distributed_zero_first, EvalPrediction
     from .data.data_collator import DefaultDataCollator, DataCollator, DataCollatorForLanguageModeling, DataCollatorForGlueLanguageModeling
-    from .data.datasets import GlueDataset, TextDataset, LineByLineTextDataset, GlueDataTrainingArguments, GlueAugDataset, GlueTextDataset
+    from .data.datasets import GlueDataset, TextDataset, LineByLineTextDataset, GlueDataTrainingArguments, GlueAugDataset, GlueTextDataset, GlueTestDataset
 
 
 # TensorFlow

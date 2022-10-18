@@ -5,13 +5,14 @@ import dataclasses
 import logging
 import os
 import sys
+import string
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 import glob
 
 import numpy as np
 
-from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer, EvalPrediction, GlueDataset, GlueAugDataset
+from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer, EvalPrediction, GlueDataset, GlueAugDataset, GlueTestDataset
 from transformers import GlueDataTrainingArguments as DataTrainingArguments
 from transformers import (
     HfArgumentParser,
@@ -134,6 +135,7 @@ def main():
     # Get datasets
     train_dataset_class = GlueDataset
     eval_dataset_class = GlueDataset
+    test_dataset_class = GlueTestDataset
     if training_args.do_aug and training_args.aug_type:
         if training_args.aug_type in {'back_trans', 'cbert'}:
             if data_args.train_aug_file:
@@ -145,7 +147,7 @@ def main():
     train_dataset = train_dataset_class(data_args, tokenizer=tokenizer) if training_args.do_train else None
     eval_dataset = eval_dataset_class(data_args, tokenizer=tokenizer, evaluate=True) if training_args.do_eval or \
                                                                                     training_args.do_eval_all else None
-
+    
     def compute_metrics(p: EvalPrediction) -> Dict:
         if output_mode == "classification":
             preds = np.argmax(p.predictions, axis=1)
@@ -227,6 +229,28 @@ def main():
 
         logger.info("***** Eval results *****")
         report_results(header, results, axis=1)
+    
+    elif training_args.do_predict:
+        
+        checkpoint_aug_type = "checkpoint_token" if training_args.aug_type == "token_cutoff" else "checkpoint_span"
+        orig_task_name = data_args.task_name.upper()
+        
+        if orig_task_name == "COLA":
+            orig_task_name = "CoLA"
+        
+        model = AutoModelForSequenceClassification.from_pretrained(
+            f"../checkpoint/{orig_task_name}/{checkpoint_aug_type}/",
+            config = config
+        )
+        test_dataset = test_dataset_class(data_args, tokenizer = tokenizer)
+        trainer = Trainer(
+            model = model,
+            args = training_args,
+            compute_metrics = compute_metrics
+        )
+        predictions, label_ids, metrics = trainer.predict(test_dataset)
+        logger.info("****** Prediction Result *******")
+        logger.info(metrics)
 
 
 def _mp_fn(index):

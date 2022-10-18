@@ -1068,10 +1068,16 @@ class Trainer:
         if eval_losses > 0:
             metrics["eval_loss"] = eval_losses / eval_size
 
-        # Prefix all keys with eval_
+        # Prefix keys with eval_ or test_
         for key in list(metrics.keys()):
-            if not key.startswith("eval_"):
+            if description == "Evaluation" and not key.startswith("eval_"):
                 metrics[f"eval_{key}"] = metrics.pop(key)
+            elif description == "Prediction" and not key.startswith("test_"):
+                if key.startswith("eval_"):
+                    key_name = key.split("_")[1]
+                    metrics[f"test_{key_name}"] = metrics.pop(key)
+                else:
+                    metrics[f"test_{key}"] = metrics.pop(key)
 
         return PredictionOutput(predictions=preds, label_ids=label_ids, metrics=metrics)
 
