@@ -1028,8 +1028,10 @@ class BertForSequenceClassification(PreTrainedBertModel):
         # tar_prob: 특정 label의 softmax 값 (확률값)
 
         if tmp_score is None:
+            # attention 값과 모델의 prediction을 구하고자 할 때
             return att_score[0], logits
         else:
+            # prediction의 결과로 나온 label 값에 대해 gradient를 계산하고자 할 때
             gradient = torch.autograd.grad(torch.unbind(prob[:, pred_label]), tmp_score)
             # gradient: softmax까지 거친 모델 output 중 모델이 예측한 label에 해당하는 값(max)의,
             #       tmp_score에 대한 gradient

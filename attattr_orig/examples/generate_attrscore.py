@@ -339,9 +339,16 @@ def main():
     #       여기서는 layer를 하나씩 가리키는 것처럼 보임.
     for tar_layer in range(num_layer):
         # 추출한 example을 모델에 입력
-        att, baseline_logits = model(input_ids, segment_ids, input_mask, label_ids, tar_layer)
+        att, baseline_logits = model(
+            input_ids=input_ids,
+            token_type_ids=segment_ids,
+            attention_mask=input_mask,
+            labels=label_ids,
+            tar_layer=tar_layer
+        )
         pred_label = int(torch.argmax(baseline_logits))
         att_all.append(att.data)
+        print("att.data:", att.data.size())
         # baseline 설정 (default로 zero tensor를 사용하도록 되어 있으며 이때 논문의 수식과 일치하게 됨)
         if args.zero_baseline:
             baseline = None
@@ -352,17 +359,26 @@ def main():
         # scale_att: 입력된 attribution matrix와 baseline의 차이를 계산해서, batch_size*num_batch(=:N)로
         #       나눈 뒤 거기에 다시 1부터 N까지의 수를 차례로 곱해서 그 결과들을 cat으로 연결한 것.
         #       default가 "baseline = zero tensor"이므로, (1/m)A부터 (m/m)A=A까지를 연결해놓은 것에 해당.
-        # step: 앞에서 계산한 차이. baseline이 zero일 때 (1/m)A에 해당.
+        # step: 앞에서 계산한 차이를 N으로 나눈 것. baseline이 zero일 때 (1/m)A에 해당.
         scale_att.requires_grad_(True)
 
         attr_all = None
         prob_all = None
         for j_batch in range(args.num_batch):
             one_batch_att = scale_att[j_batch*args.batch_size:(j_batch+1)*args.batch_size]
+            print("one_batch_att:", one_batch_att.size())
             # one_batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
             #       수식에서 (k/m)A_h에 해당 (m = num_batch 로 설정한 것으로 보임)
             # 이제 이렇게 얻은 attention을 모델에 입력해 gradient를 얻음
-            tar_prob, grad = model(input_ids, segment_ids, input_mask, label_ids, tar_layer, one_batch_att, pred_label=pred_label)
+            tar_prob, grad = model(
+                input_ids=input_ids,
+                token_type_ids=segment_ids,
+                attention_mask=input_mask,
+                labels=label_ids,
+                tar_layer=tar_layer,
+                tmp_score=one_batch_att,
+                pred_label=pred_label
+            )
             # tar_prob: 주어진 example의 원래 label에 해당하는 softmax 값 (모델이 예측한 확률)
             # grad: 모델이 예측한 label에 해당하는 softmax 값의, one_batch_att에 대한 gradient
             #       TODO: 왜 gradient를 A_h가 아니라 (k/m)A에 대해 계산할까?
