@@ -1,4 +1,4 @@
-"Getting attribution scores of the example."
+"Pruning attention heads with attribution scores"
 
 from __future__ import absolute_import
 from __future__ import division
@@ -16,9 +16,10 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
+import torch.nn.functional as F
 
 from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.model_attr import BertForSequenceClassification, BertForPreTrainingLossMask
+from pytorch_pretrained_bert.model_prune_head import BertForSequenceClassification, BertForPreTrainingLossMask
 from pytorch_pretrained_bert.optimization import BertAdam
 from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from examples.classifier_processer import InputExample, InputFeatures, DataProcessor, MrpcProcessor, MnliProcessor, RteProcessor, ScitailProcessor, ColaProcessor, SstProcessor, QqpProcessor, QnliProcessor, WnliProcessor, StsProcessor
@@ -54,7 +55,7 @@ num_labels_task = {
     "scitail": 2,
 }
 
-# 입력 문장을 tokenize 해서 BERT의 입력 형식에 맞게 변형
+
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
     if label_list:
@@ -152,7 +153,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     return features, tokenslist
 
 
-# 두 개의 문장이 주어지는 task에 대해, 문장쌍을 적절히 잘라 max_length를 준수하도록 함
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
     """Truncates a sequence pair in place to the maximum length."""
 
@@ -169,22 +169,15 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
         else:
             tokens_b.pop()
 
-
-# A를 받아서 (k/m)A를 쉽게 사용할 수 있도록 미리 계산해둠
-# TODO: k/m을 곱하는 작업을 dynamic 하게 하지 않고 전부 저장해둔 다음 slice 해서 사용하는 이유는 뭘까?
 def scaled_input(emb, batch_size, num_batch, baseline=None, start_i=None, end_i=None):
     # shape of emb: (num_head, seq_len, seq_len)
     if baseline is None:
         baseline = torch.zeros_like(emb)   
 
-    # 전체 batch에 포함되어 있는 example의 총 개수 계산 후 그 수치로 정규화
     num_points = batch_size * num_batch
     scale = 1.0 / num_points
-
     if start_i is None:
-        # attribution matrix와 설정된 baseline의 차이를 계산
         step = (emb.unsqueeze(0) - baseline.unsqueeze(0)) * scale
-        # 그 차이에 1/m부터 시작해서 1까지를 곱한 결과를 cat으로 연결
         res = torch.cat([torch.add(baseline.unsqueeze(0), step*i) for i in range(num_points)], dim=0)
         return res, step[0]
     else:
@@ -212,12 +205,12 @@ def main():
                         default=None,
                         type=str,
                         required=True,
-                        help="The name of the task.")
+                        help="The name of the task to train.")
     parser.add_argument("--output_dir",
                         default=None,
                         type=str,
                         required=True,
-                        help="The output directory where the attention/attribution score will be written.")
+                        help="The output directory where the experimental results will be written.")
     parser.add_argument("--model_file",
                         default=None,
                         type=str,
@@ -239,66 +232,76 @@ def main():
                         default=False,
                         action='store_true',
                         help="Whether not to use CUDA when available")
+    parser.add_argument("--local_rank",
+                        type=int,
+                        default=-1,
+                        help="local_rank for distributed training on gpus")
     parser.add_argument('--seed',
                         type=int,
                         default=42,
                         help="random seed for initialization")
 
-    # parameters about attention attribution
-    parser.add_argument("--get_att_attr",
-                        default=False,
-                        action='store_true',
-                        help="Get attention attribution scores.")
-    parser.add_argument("--get_att_score",
-                        default=False,
-                        action='store_true',
-                        help="Get attention scores.")
+    # pruning head parameters
     parser.add_argument("--batch_size",
-                        default=16,
+                        default=20,
                         type=int,
-                        help="Total batch size for cut.")
+                        help="Total batch size for attention score cut.")
     parser.add_argument("--num_batch",
-                        default=4,
+                        default=1,
                         type=int,
                         help="Num batch of an example.")
-    parser.add_argument("--zero_baseline",
-                        default=True,
-                        action='store_true',
-                        help="If use zero attention matrix as the baseline.")
-    parser.add_argument("--example_index",
-                        default=5,
+    parser.add_argument("--eval_batch_size",
+                        default=256,
                         type=int,
-                        help="Get attr output of the target example.")
+                        help="Batch size for evaluation.")
+    parser.add_argument("--num_examples",
+                        default=200,
+                        type=int,
+                        help="The number of dev examples to compute the attention head importance.")
+
 
     args = parser.parse_args()
-    args.zero_baseline = True
 
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    if args.local_rank == -1 or args.no_cuda:
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        n_gpu = torch.cuda.device_count()
+    else:
+        torch.cuda.set_device(args.local_rank)
+        device = torch.device("cuda", args.local_rank)
+        n_gpu = 1
+        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
+        torch.distributed.init_process_group(backend='nccl')
+    logger.info("device: {} n_gpu: {}, distributed training: {}".format(
+        device, n_gpu, bool(args.local_rank != -1)))
 
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    if n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
+
+    os.makedirs(args.output_dir, exist_ok=True)
 
     task_name = args.task_name.lower()
 
     if task_name not in processors:
         raise ValueError("Task not found: %s" % (task_name))
 
-    processor = processors[task_name]()         # 따로 구현한 data processor class를 쓰는 것으로 보임
+    processor = processors[task_name]()
     num_labels = num_labels_task[task_name]
     label_list = processor.get_labels()
 
-    # Load pretrained tokenizer
     tokenizer = BertTokenizer.from_pretrained(
         args.bert_model, do_lower_case=args.do_lower_case)
+
+    logger.info("***** CUDA.empty_cache() *****")
+    torch.cuda.empty_cache()
 
     if args.task_name == 'sts-b':
         lbl_type = torch.float
     else:
         lbl_type = torch.long
-
-    logger.info("***** CUDA.empty_cache() *****")
-    torch.cuda.empty_cache()
 
     # Load a fine-tuned model 
     model_state_dict = torch.load(args.model_file)
@@ -306,92 +309,169 @@ def main():
         args.bert_model, state_dict=model_state_dict, num_labels=num_labels)
     model.to(device)
 
+    if n_gpu > 1:
+        model = torch.nn.DataParallel(model)
+
+    # Prepare the data
     eval_segment = "dev_matched" if args.task_name == "mnli" else "dev"
-    # Attr score를 계산할 example 선택 (이때 example index는 program argument로 받음)
-    eval_examples = [processor.get_dev_examples(
-        args.data_dir, segment=eval_segment)[args.example_index]]
+    eval_examples = processor.get_dev_examples(
+        args.data_dir, segment=eval_segment)[0:args.num_examples]
 
     model.eval()
-
-    res_attr = []
-    att_all = []
 
     if args.bert_model.find("base") != -1:
         num_head, num_layer = 12, 12
     elif args.bert_model.find("large") != -1:
         num_head, num_layer = 16, 24
 
+    eval_loss, eval_result = 0, 0
+    nb_eval_steps = 0
+    imp_head_count = [[0]*num_head for i in range(num_layer)]
+    prune_head_count = [[0]*num_head for i in range(num_layer)]
+    all_logits, all_label_ids = [], []
+    seg_result_dict = {}
+
+    attr_every_head_record = [0] * num_head * num_layer
+
+    # evaluate the model
     eval_features, tokenlist = convert_examples_to_features(
         eval_examples, label_list, args.max_seq_length, tokenizer)
-    logger.info("***** Running evaluation: %s *****", eval_segment)
-    logger.info("  Num examples = %d", len(eval_examples))
-    logger.info("  Batch size = %d", args.batch_size)
-    eval_feature = eval_features[0]
+    all_baseline_ids = torch.tensor(
+        [f.baseline_ids for f in eval_features], dtype=torch.long)
+    all_input_ids = torch.tensor(
+        [f.input_ids for f in eval_features], dtype=torch.long)
+    all_input_mask = torch.tensor(
+        [f.input_mask for f in eval_features], dtype=torch.long)
+    all_segment_ids = torch.tensor(
+        [f.segment_ids for f in eval_features], dtype=torch.long)
+    all_label_ids = torch.tensor(
+        [f.label_id for f in eval_features], dtype=lbl_type)
+
+    eval_data = TensorDataset(
+        all_baseline_ids, all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    # Get importance of every attention head 
+    eval_sampler = SequentialSampler(eval_data)
+    eval_dataloader = DataLoader(
+        eval_data, sampler=eval_sampler, batch_size=1)
     
-    baseline_ids = torch.tensor([eval_feature.baseline_ids], dtype=torch.long).to(device)
-    input_ids = torch.tensor([eval_feature.input_ids], dtype=torch.long).to(device)
-    input_mask = torch.tensor([eval_feature.input_mask], dtype=torch.long).to(device)
-    segment_ids = torch.tensor([eval_feature.segment_ids], dtype=torch.long).to(device)
-    label_ids = torch.tensor([eval_feature.label_id], dtype=torch.long).to(device)
-    input_len = int(input_mask[0].sum())  
+    model.eval()
+    eval_loss, eval_result = 0, 0
+    all_logits, all_label_ids = [], []
+    index_count = 0
+    for baseline_ids, input_ids, input_mask, segment_ids, label_ids,  in eval_dataloader:
+        input_ids = input_ids.to(device)
+        input_mask = input_mask.to(device)
+        segment_ids = segment_ids.to(device)
+        label_ids = label_ids.to(device)
+        input_len = int(input_mask[0].sum())        
+        
+        for tar_layer in range(0, num_layer):
+            att, _ = model(input_ids, "att", segment_ids, input_mask, label_ids, tar_layer)
+            att = att[0]
+            scale_att, step = scaled_input(att.data, args.batch_size, args.num_batch)
+            scale_att.requires_grad_(True)
 
-    # TODO: 여기서 tar_layer는 뭘까? 원래 head를 하나씩 가리켜야 의도에 맞을 것 같은데,
-    #       여기서는 layer를 하나씩 가리키는 것처럼 보임.
-    for tar_layer in range(num_layer):
-        # 추출한 example을 모델에 입력
-        att, baseline_logits = model(input_ids, segment_ids, input_mask, label_ids, tar_layer)
-        pred_label = int(torch.argmax(baseline_logits))
-        att_all.append(att.data)
-        # baseline 설정 (default로 zero tensor를 사용하도록 되어 있으며 이때 논문의 수식과 일치하게 됨)
-        if args.zero_baseline:
-            baseline = None
-        else:
-            baseline = model(input_ids, segment_ids, input_mask, label_ids, -tar_layer-1)[0]
-            baseline = baseline.data
-        scale_att, step = scaled_input(att.data, args.batch_size, args.num_batch, baseline)
-        # scale_att: 입력된 attribution matrix와 baseline의 차이를 계산해서, batch_size*num_batch(=:N)로
-        #       나눈 뒤 거기에 다시 1부터 N까지의 수를 차례로 곱해서 그 결과들을 cat으로 연결한 것.
-        #       default가 "baseline = zero tensor"이므로, (1/m)A부터 (m/m)A=A까지를 연결해놓은 것에 해당.
-        # step: 앞에서 계산한 차이. baseline이 zero일 때 (1/m)A에 해당.
-        scale_att.requires_grad_(True)
+            attr_all = None
+            for j_batch in range(args.num_batch):
+                one_batch_att = scale_att[j_batch*args.batch_size:(j_batch+1)*args.batch_size]
+                tar_prob, grad = model(input_ids, "att", segment_ids, input_mask, label_ids, 
+                                        tar_layer, one_batch_att, pred_label=label_ids[0])
+                grad = grad.sum(dim=0)  
+                attr_all = grad if attr_all is None else torch.add(attr_all, grad)
+            attr_all = attr_all[:,0:input_len,0:input_len] * step[:,0:input_len,0:input_len]
+            for i in range(0, num_head):
+                attr_every_head_record[tar_layer*num_head+i] += float(attr_all[i].max())
+        
+    with open(os.path.join(args.output_dir, "head_importance_attr.json"), "w") as f_out:
+        f_out.write(json.dumps(attr_every_head_record, indent=2, sort_keys=True))
+        f_out.write('\n')
 
-        attr_all = None
-        prob_all = None
-        for j_batch in range(args.num_batch):
-            one_batch_att = scale_att[j_batch*args.batch_size:(j_batch+1)*args.batch_size]
-            # one_batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
-            #       수식에서 (k/m)A_h에 해당 (m = num_batch 로 설정한 것으로 보임)
-            # 이제 이렇게 얻은 attention을 모델에 입력해 gradient를 얻음
-            tar_prob, grad = model(input_ids, segment_ids, input_mask, label_ids, tar_layer, one_batch_att, pred_label=pred_label)
-            # tar_prob: 주어진 example의 원래 label에 해당하는 softmax 값 (모델이 예측한 확률)
-            # grad: 모델이 예측한 label에 해당하는 softmax 값의, one_batch_att에 대한 gradient
-            #       TODO: 왜 gradient를 A_h가 아니라 (k/m)A에 대해 계산할까?
-            grad = grad.sum(dim=0) 
-            attr_all = grad if attr_all is None else torch.add(attr_all, grad)
-            prob_all = tar_prob if prob_all is None else torch.cat([prob_all, tar_prob])
-        # gradient에 attribution matrix와 baseline의 차이를 곱함
-        attr_all = attr_all[:,0:input_len,0:input_len] * step[:,0:input_len,0:input_len]
-        res_attr.append(attr_all.data)
-
-    # dump predictions
-    if args.get_att_attr:
-        file_name = "attr_pos_base_exp{0}.json" if args.zero_baseline is False else "attr_zero_base_exp{0}.json"
-        with open(os.path.join(args.output_dir, file_name.format(args.example_index)), "w") as f_out:
-            for grad in res_attr:
-                res_grad = grad.tolist()
-                output = json.dumps(res_grad)
-                f_out.write(output + '\n')
-        # FIXME: 지금은 example index를 하나씩 수동으로 입력받아서 attr score 계산 결과를 파일로 저장하도록
-        #       되어 있음. 우리는 example index 입력하는 부분과 score를 계산해 적절한 token을 선별해서
-        #       그 지점에 cutoff를 적용할 수 있도록 하는 부분을 자동화해야 함.
+    eval_segment = "dev_matched" if args.task_name == "mnli" else "dev"
+    eval_examples = processor.get_dev_examples(
+        args.data_dir, segment=eval_segment)
     
-    if args.get_att_score:
-        file_name = "att_score_pos_base_exp{0}.json" if args.zero_baseline is False else "att_score_zero_base_exp{0}.json"
-        with open(os.path.join(args.output_dir, file_name.format(args.example_index)), "w") as f_out:
-            for att in att_all:
-                att = att[:,0:input_len,0:input_len]
-                output = json.dumps(att.tolist())
-                f_out.write(output + '\n')
+    prune_result = []
+    for prune_i in range(0, 11, 1):
+        prune_rate = prune_i / 10
+        important_index = np.argsort(np.array(attr_every_head_record))
+        importance_set = [[1.0]*num_head for i in range(0, num_layer)]
+        for i in range(0, min(int(prune_rate*num_layer*num_head),num_layer*num_head), 1):
+            importance_set[important_index[i]//num_head][important_index[i]%num_head] = 0.0
+        importance_set = torch.tensor(importance_set)
+        importance_set = importance_set.view(*importance_set.shape, 1, 1)
+        importance_set = importance_set.expand(-1, -1, args.max_seq_length, args.max_seq_length).to(device)
+
+        eval_loss, eval_result = 0, 0
+        nb_eval_steps = 0
+        all_logits, all_label_ids = [], []
+        seg_result_dict = {}
+
+        # evaluate the pruned model
+        eval_features, tokenlist = convert_examples_to_features(
+            eval_examples, label_list, args.max_seq_length, tokenizer)
+        logger.info("***** Running evaluation: %s *****", eval_segment)
+        logger.info("  Num examples = %d", len(eval_examples))
+        logger.info("  Batch size = %d", args.eval_batch_size)
+        all_input_ids = torch.tensor(
+            [f.input_ids for f in eval_features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in eval_features], dtype=torch.long)
+        all_segment_ids = torch.tensor(
+            [f.segment_ids for f in eval_features], dtype=torch.long)
+        all_label_ids = torch.tensor(
+            [f.label_id for f in eval_features], dtype=lbl_type)
+        eval_data = TensorDataset(
+            all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        # Run prediction 
+        eval_sampler = SequentialSampler(eval_data)
+        eval_dataloader = DataLoader(
+            eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
+
+        eval_loss, eval_result = 0, 0
+        nb_eval_steps = 0
+        all_logits, all_label_ids = [], []
+        for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            segment_ids = segment_ids.to(device)
+            label_ids = label_ids.to(device)
+
+            with torch.no_grad():
+                tmp_eval_loss, logits = model(input_ids, "res", segment_ids, input_mask, label_ids, att_head_mask=importance_set)
+
+            logits = logits.detach().cpu().numpy()
+            label_ids = label_ids.to('cpu').numpy()
+            all_logits.append(logits)
+            all_label_ids.append(label_ids)
+
+            eval_loss += tmp_eval_loss.mean().item()
+
+            nb_eval_steps += 1
+
+        eval_loss = eval_loss / nb_eval_steps
+
+        # compute evaluation metric
+        all_logits = np.concatenate(all_logits, axis=0)
+        all_label_ids = np.concatenate(all_label_ids, axis=0)
+        metric_func = processor.get_metric_func()
+        eval_result = metric_func(all_logits, all_label_ids)
+        prune_result.append(eval_result)
+        result = {'prune_rate': prune_rate,
+                    'eval_loss': eval_loss,
+                    'eval_result': eval_result,
+                    'task_name': args.task_name,
+                    'eval_segment': eval_segment}
+        if eval_segment not in seg_result_dict:
+            seg_result_dict[eval_segment] = []
+        seg_result_dict[eval_segment].append(result)
+        # logging the results
+        logger.info(
+            "***** Eval results ({0}) *****".format(eval_segment))
+        for key in sorted(result.keys()):
+            logger.info("  %s = %s", key, str(result[key]))
+    with open(os.path.join(args.output_dir, "prune_result_attr.json"), "w") as f_out:
+        f_out.write(json.dumps(prune_result, indent=2, sort_keys=True))
+        f_out.write('\n')
 
 
 if __name__ == "__main__":
