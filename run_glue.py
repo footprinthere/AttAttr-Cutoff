@@ -239,7 +239,7 @@ def main():
             orig_task_name = "CoLA"
         
         model = AutoModelForSequenceClassification.from_pretrained(
-            f"../checkpoint/{orig_task_name}/{checkpoint_aug_type}/",
+            f"/home/jovyan/work/checkpoint/{orig_task_name}/{checkpoint_aug_type}/",
             config = config
         )
         test_dataset = test_dataset_class(data_args, tokenizer = tokenizer)

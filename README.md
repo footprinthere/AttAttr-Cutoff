@@ -18,6 +18,9 @@ $ ./run_glue {dataset name} {GPU number} {train batch size}
 span_cutoff, token_cutoff, dim_cutoff
 ```
 
+## Subprojects
+**Attention Attribution + Cutoff** [AttAttr-Cutoff](https://github.com/footprinthere/AttAttr-Cutoff)
+
 ## References
 **Cutoff** [github](https://github.com/dinghanshen/Cutoff)
 
