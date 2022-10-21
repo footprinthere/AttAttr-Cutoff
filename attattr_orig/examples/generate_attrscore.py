@@ -301,14 +301,10 @@ def main():
     torch.cuda.empty_cache()
 
     # Load a fine-tuned model 
-    # FIXME: For TEST
+    model_state_dict = torch.load(args.model_file)
     model = BertForSequenceClassification.from_pretrained(
-        "bert-large-cased", num_labels=num_labels,
+        args.bert_model, state_dict=model_state_dict, num_labels=num_labels
     )
-    # model_state_dict = torch.load(args.model_file)
-    # model = BertForSequenceClassification.from_pretrained(
-    #     args.bert_model, state_dict=model_state_dict, num_labels=num_labels
-    # )
     model.to(device)
 
     eval_segment = "dev_matched" if args.task_name == "mnli" else "dev"
@@ -340,8 +336,6 @@ def main():
     label_ids = torch.tensor([eval_feature.label_id], dtype=torch.long).to(device)
     input_len = int(input_mask[0].sum())  
 
-    # TODO: 여기서 tar_layer는 뭘까? 원래 head를 하나씩 가리켜야 의도에 맞을 것 같은데,
-    #       여기서는 layer를 하나씩 가리키는 것처럼 보임.
     for tar_layer in range(num_layer):
         # 추출한 example을 모델에 입력
         att, baseline_logits = model(
@@ -351,7 +345,7 @@ def main():
             labels=label_ids,
             tar_layer=tar_layer
         )
-        # att.data : [num_layers, seq_len, seq_len]
+        # att.data : [num_heads, seq_len, seq_len]
         pred_label = int(torch.argmax(baseline_logits))
         att_all.append(att.data)
         # baseline 설정 (default로 zero tensor를 사용하도록 되어 있으며 이때 논문의 수식과 일치하게 됨)
@@ -364,7 +358,7 @@ def main():
         # scale_att: 입력된 attribution matrix와 baseline의 차이를 계산해서, batch_size*num_batch(=:N)로
         #       나눈 뒤 거기에 다시 1부터 N까지의 수를 차례로 곱해서 그 결과들을 cat으로 연결한 것.
         #       default가 "baseline = zero tensor"이므로, (1/m)A부터 (m/m)A=A까지를 연결해놓은 것에 해당.
-        #       [N, num_layers, seq_len, seq_len]
+        #       [N, num_heads, seq_len, seq_len]
         # step: 앞에서 계산한 차이를 N으로 나눈 것. baseline이 zero일 때 (1/m)A에 해당.
         scale_att.requires_grad_(True)
 
@@ -374,7 +368,7 @@ def main():
             one_batch_att = scale_att[j_batch*args.batch_size:(j_batch+1)*args.batch_size]
             # one_batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
             #       수식에서 (k/m)A_h에 해당 (m = num_batch 로 설정한 것으로 보임)
-            #       [batch_size, num_layers, seq_len, seq_len]
+            #       [batch_size, num_heads, seq_len, seq_len]
             # 이제 이렇게 얻은 attention을 모델에 입력해 gradient를 얻음
             tar_prob, grad = model(
                 input_ids=input_ids,
@@ -387,21 +381,23 @@ def main():
             )
             # tar_prob: 주어진 example의 원래 label에 해당하는 softmax 값 (모델이 예측한 확률)
             # grad: 모델이 예측한 label에 해당하는 softmax 값의, one_batch_att에 대한 gradient
-            #       [batch_size, num_layers, seq_len, seq_len]
+            #       [batch_size, num_heads, seq_len, seq_len]
             #       TODO: 왜 gradient를 A_h가 아니라 (k/m)A에 대해 계산할까?
             grad = grad.sum(dim=0)      # batch_size 차원을 따라 sum
             attr_all = grad if attr_all is None else torch.add(attr_all, grad)
             # attr_all: gradient의 누적합
-            #       [num_layers, seq_len, seq_len]
+            #       [num_heads, seq_len, seq_len]
             prob_all = tar_prob if prob_all is None else torch.cat([prob_all, tar_prob])
         # gradient에 attribution matrix와 baseline의 차이를 곱함
         attr_all = attr_all[:,0:input_len,0:input_len] * step[:,0:input_len,0:input_len]
         res_attr.append(attr_all.data)
-        print(f"res_attr: {len(res_attr)} * {res_attr[0].size()}")
+        # res_attr: num_layers * [num_heads, seq_len, seq_len]
 
     # dump predictions
     if args.get_att_attr:
         file_name = "attr_pos_base_exp{0}.json" if args.zero_baseline is False else "attr_zero_base_exp{0}.json"
+        if not os.path.isdir(args.output_dir):
+            os.mkdir(args.output_dir)
         with open(os.path.join(args.output_dir, file_name.format(args.example_index)), "w") as f_out:
             for grad in res_attr:
                 res_grad = grad.tolist()

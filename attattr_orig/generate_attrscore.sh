@@ -7,5 +7,4 @@ PYTHONPATH=`pwd` python examples/generate_attrscore.py \
     --model_file model_and_data/model.mnli.bin \
     --example_index 10 \
     --get_att_attr \
-    --output_dir outputs \
-    --no_cuda
+    --output_dir outputs
