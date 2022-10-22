@@ -3,7 +3,7 @@
 # $2: number of GPU to use
 # $3: batch size 
 
-export GLUE_DIR=./glue_data
+export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
 export NUM_GPU=$2
 export BATCH_SIZE=$3
