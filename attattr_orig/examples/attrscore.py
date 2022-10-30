@@ -202,7 +202,7 @@ def scale_input(attention, batch_size, num_batches):
 
 
 def generate_attrscore(
-    model,
+    model,          # 모델이 attention을 return 하도록 config가 설정되어 있어야 함
     tokenizer,
     data_dir,
     task_name,
