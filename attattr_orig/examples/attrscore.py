@@ -1,7 +1,8 @@
-import os
+import argparse
 import logging
 import random
 import json
+import os
 
 import numpy as np
 import torch
@@ -135,18 +136,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             label_id = label_map[example.label]
         else:
             label_id = float(example.label)
-        if ex_index < 2:
-            logger.debug("*** Example ***")
-            logger.debug("guid: %s" % (example.guid))
-            logger.debug("tokens: %s" % " ".join(
-                [str(x) for x in tokens]))
-            logger.debug("input_ids: %s" %
-                         " ".join([str(x) for x in input_ids]))
-            logger.debug("input_mask: %s" %
-                         " ".join([str(x) for x in input_mask]))
-            logger.debug(
-                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            logger.debug("label: %s (id = %d)" % (example.label, label_id))
 
         features.append(
             InputFeatures(input_ids=input_ids,
@@ -204,21 +193,16 @@ def scale_input(attention, batch_size, num_batches):
 def generate_attrscore(
     model,          # 모델이 attention을 return 하도록 config가 설정되어 있어야 함
     tokenizer,
+    processor,
     data_dir,
-    task_name,
     example_index,
-    batch_size=16,
+    batch_size=16,  # TODO: batch_size와 num_batch의 역할은 뭘까?
     num_batches=4,
     max_len=128,
     return_attentions=False,
     device="cuda",
 ):
-    task_name = task_name.lower()
-    if task_name not in processors:
-        raise ValueError("Task not found:", task_name)
 
-    processor = processors[task_name]()     # data processor class
-    num_labels = num_labels_task[task_name]
     label_list = processor.get_labels()
 
     torch.cuda.empty_cache()
@@ -306,3 +290,70 @@ def generate_attrscore(
         return result_attr, att_all
     else:
         return result_attr
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, required=True)
+    parser.add_argument("--model_file", type=str, required=True)
+    parser.add_argument("--task_name", type=str, required=True)
+    parser.add_argument("--data_dir", type=str, required=True)
+    parser.add_argument("--example_index", type=int, required=True)
+    parser.add_argument("--num_batches", type=int, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--output_dir", type=str, required=True)
+
+    args = parser.parse_args()
+
+    SEED = 42
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    device = 'cuda'
+
+    task_name = args.task_name.lower()
+    num_labels = num_labels_task[task_name]
+    processor = processors[task_name]()
+
+    # Load model and tokenizer
+    config = BertConfig.from_pretrained(
+        args.model_name,
+        num_labels=num_labels,
+        output_attentions=True,
+    )
+
+    model_state_dict = torch.load(args.model_file)
+    model = BertForSequenceClassification.from_pretrained(
+        config=config,
+        state_dict=model_state_dict,
+    )
+    model.to(device)
+
+    tokenizer = BertTokenizer.from_pretrained(args.model_name)
+
+    # Generate attribution scores
+    attr = generate_attrscore(
+        model=model,
+        tokenizer=tokenizer,
+        processor=processor,
+        data_dir=args.data_dir,
+        example_index=args.example_index,
+        batch_size=args.batch_size,
+        num_batches=args.num_batches,
+        device=device,
+    )
+
+    # Dump results
+    file_name = "attr_ex{0}.json"
+    if not os.path.isdir(args.output_dir):
+        os.mkdir(args.output_dir)
+    with open(os.path.join(args.output_dir, file_name.format(args.example_index)), 'w') as file:
+        for layer_attr in attr:
+            output = json.dumps(layer_attr.tolist())
+            file.write(output + '\n')
+
+    for i in range(len(attr)):
+        print(i)
+        print(attr[i].size())
+        print()
