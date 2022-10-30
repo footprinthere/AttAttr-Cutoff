@@ -325,6 +325,7 @@ if __name__ == '__main__':
 
     model_state_dict = torch.load(args.model_file)
     model = BertForSequenceClassification.from_pretrained(
+        args.model_name,
         config=config,
         state_dict=model_state_dict,
     )
