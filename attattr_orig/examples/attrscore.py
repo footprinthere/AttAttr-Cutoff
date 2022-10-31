@@ -269,6 +269,7 @@ def generate_attrscore(
             #       [batch_size, num_heads, seq_len, seq_len]
             
             # attention에 대한 모델 prediction의 gradient 계산
+            # FIXME: outputs 계산에 inputs가 사용되지 않아서 unused 오류 발생
             gradients = torch.autograd.grad(
                 outputs=torch.unbind(prob[:, pred_label]),
                 inputs=batch_att,
