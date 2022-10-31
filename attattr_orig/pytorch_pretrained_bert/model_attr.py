@@ -251,6 +251,7 @@ class BertSelfAttention(nn.Module):
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
 
+        # TODO: 이 부분을 포함하도록 RoBERTa를 재구현해야 함
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
         if tmp_score is not None:

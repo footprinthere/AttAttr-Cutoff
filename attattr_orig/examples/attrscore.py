@@ -264,7 +264,7 @@ def generate_attrscore(
         for batch in range(num_batches):
             batch_att = scaled_att[batch*batch_size : (batch+1)*batch_size]
 
-            # one_batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
+            # batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
             #       수식에서 (k/m)A_h에 해당 (m = num_batches 로 설정한 것으로 보임)
             #       [batch_size, num_heads, seq_len, seq_len]
             
