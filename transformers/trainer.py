@@ -638,21 +638,31 @@ class Trainer:
 
         return input_embeds, input_masks
 
+    def get_attribution(example):
+        ...     # output: num_layers * [num_heads, input_len, input_len]
+
+    # TODO:
     def generate_token_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
         input_masks = []
         for i in range(embeds.shape[0]):
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
-            zero_index = torch.randint(input_lens[i], (cutoff_length,))
-            
-            # 0으로 대체할 지점의 index를 랜덤으로 생성
-            cutoff_embed = embeds[i]
-            cutoff_mask = masks[i]
 
-            tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
-            for ind in zero_index:
-                tmp_mask[ind] = 0
-            # 설정된 index 위치를 0으로 대체
+            for ex_idx in range(embeds.size(0)):
+                example = embeds[ex_idx]
+                attr = self.get_attribution(example)
+                ...
+
+            # zero_index = torch.randint(input_lens[i], (cutoff_length,))
+            
+            # # 0으로 대체할 지점의 index를 랜덤으로 생성
+            # cutoff_embed = embeds[i]
+            # cutoff_mask = masks[i]
+
+            # tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
+            # for ind in zero_index:
+            #     tmp_mask[ind] = 0
+            # # 설정된 index 위치를 0으로 대체
 
             cutoff_embed = torch.mul(tmp_mask[:, None], cutoff_embed)
             cutoff_mask = torch.mul(tmp_mask, cutoff_mask).type(torch.int64)
