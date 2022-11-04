@@ -11,6 +11,8 @@ from transformers import (
     BertForSequenceClassification,
     BertTokenizer,
     BertConfig,
+    RobertaForSequenceClassification,
+    RobertaConfig,
 )
 
 from classifier_processer import *      # FIXME: 결국 제거 필요
@@ -185,8 +187,8 @@ def generate_attrscore(
     tokenizer,
     processor,
     data_dir,
-    example_index,
-    batch_size=16,  # TODO: batch_size와 num_batch의 역할은 뭘까?
+    example_index,  # FIXME: 아예 tokenize 된 sequence를 받도록 구현 수정
+    batch_size=16,
     num_batches=4,
     max_len=128,
     return_attentions=False,
@@ -201,11 +203,9 @@ def generate_attrscore(
     eval_examples = [
         processor.get_dev_examples(data_dir, segment=eval_segment)[example_index]
     ]
-    # FIXME: 여러 example 한 번에 처리하려면 수정 필요 (index로 slicing)
 
     model.eval()
 
-    # FIXME: RoBERTa에 맞게 수정 필요
     num_heads, num_layers = 12, 12
 
     eval_features, tokenlist = convert_examples_to_features(
@@ -230,7 +230,6 @@ def generate_attrscore(
     logits = model_outputs[1]
     attentions = model_outputs[2]       # num_layers * [batch_size, num_heads, seqlen, seqlen]
     pred_label = int(torch.argmax(torch.squeeze(logits, dim=0)))
-    # FIXME: 여러 example 한 번에 처리하려면 수정 필요 (squeeze 하지 말고 indexing)
 
     prob = torch.nn.functional.softmax(logits)
     target_prob = prob[:, label_ids[0]]
@@ -251,18 +250,21 @@ def generate_attrscore(
         attr_all = torch.zeros((batch_size, num_heads, input_len, input_len))
         prob_all = None
 
+        # 원래 총 m(= num_batches * batch_size)번의 계산을 해야 하지만 batch 단위로 묶어서 수행
         for batch in range(num_batches):
             batch_att = scaled_att[batch*batch_size : (batch+1)*batch_size]
-
             # batch_att: 앞서 얻은 scale_att 중 특정 구간을 추출한 것
-            #       수식에서 (k/m)A_h에 해당 (m = num_batches 로 설정한 것으로 보임)
+            #       수식에서 (k/m)A_h에 해당
             #       [batch_size, num_heads, seq_len, seq_len]
             
             # attention에 대한 모델 prediction의 gradient 계산
-            # FIXME: outputs 계산에 inputs가 사용되지 않아서 unused 오류 발생
-            gradients = torch.autograd.grad(
-                outputs=torch.unbind(prob[:, pred_label]),
-                inputs=batch_att,
+            gradients = model(
+                input_ids=input_ids,
+                token_type_ids=segment_ids,
+                attention_mask=input_mask,
+                labels=label_ids,
+                replace_attention=batch_att,
+                pred_label=pred_label,
             )
             # gradients: 모델이 예측한 label에 해당하는 softmax 값의, batch_att에 대한 gradient
             #       [batch_size, num_heads, seq_len, seq_len]
