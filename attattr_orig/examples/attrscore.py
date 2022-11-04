@@ -340,7 +340,7 @@ if __name__ == '__main__':
         tokenizer=tokenizer,
         processor=processor,
         data_dir=args.data_dir,
-        example_index=args.example_index,
+        example_index=args.example_index,   # FIXME: example을 이런 식으로 넘기지 말고 아예 tokenized vector로 넘기도록 구현
         batch_size=args.batch_size,
         num_batches=args.num_batches,
         device=device,
