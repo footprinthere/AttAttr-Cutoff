@@ -1,7 +1,7 @@
 export PYTHONPATH=`pwd`
 export CUDA_VISIBLE_DEVICES=$1
 
-python examples/attrscore.py \
+python attrscore.py \
     --model_name bert-base-cased \
     --model_file model_and_data/model.mnli.bin \
     --task_name mnli \

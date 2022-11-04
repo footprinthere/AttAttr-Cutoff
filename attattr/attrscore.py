@@ -12,18 +12,8 @@ from transformers import (
     BertTokenizer,
     BertConfig,
 )
-from examples.classifier_processer import (
-    InputFeatures,
-    MrpcProcessor,
-    MnliProcessor,
-    RteProcessor,
-    ColaProcessor,
-    SstProcessor,
-    QqpProcessor,
-    QnliProcessor,
-    WnliProcessor,
-    StsProcessor,
-)
+
+from classifier_processer import *      # FIXME: 결국 제거 필요
 
 
 logging.basicConfig(
