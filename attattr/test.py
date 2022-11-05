@@ -13,7 +13,7 @@ def test_main():
     )
 
     inputs = generator.process_input(
-        data_dir='model_and_data/mnli_data',
+        data_dir='/home/jovyan/work/seongtae/AttAttr-Cutoff/attattr/model_and_data/mnli_data',
         example_index=10,
     )
 
