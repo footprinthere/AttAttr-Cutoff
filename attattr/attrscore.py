@@ -153,6 +153,7 @@ class AttrScoreGenerator:
         )
         self.model.to(self.device)
         self.model.eval()
+        logger.info("Model for AttAttr is prepared.")
 
     # FIXME: for test
     def process_input(self, data_dir, example_index):
