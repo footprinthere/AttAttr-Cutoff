@@ -1,3 +1,6 @@
+# Re-implemented classes
+#   BertModel, BertEncoder, BertLayer, BertAttention, BertSelfAttention
+
 import math
 
 import torch
@@ -12,6 +15,7 @@ from transformers_cutoff.modeling_bert import (
     BertSelfOutput,
 )
 from transformers_cutoff.modeling_utils import prune_linear_layer
+
 
 class BertModel(BertPreTrainedModel):
     r"""
@@ -78,6 +82,7 @@ class BertModel(BertPreTrainedModel):
         encoder_hidden_states=None,
         encoder_attention_mask=None,
         replace_attention=None,
+        tar_layer=None,
     ):
         """ Forward pass on the Model.
 
@@ -198,6 +203,7 @@ class BertModel(BertPreTrainedModel):
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_extended_attention_mask,
             replace_attention=replace_attention,
+            tar_layer=tar_layer,
         )
         sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output)
@@ -257,6 +263,7 @@ class BertEncoder(nn.Module):
         encoder_hidden_states=None,
         encoder_attention_mask=None,
         replace_attention=None,
+        tar_layer=None,
     ):
         all_hidden_states = ()
         all_attentions = ()
@@ -264,10 +271,15 @@ class BertEncoder(nn.Module):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            layer_outputs = layer_module(
-                hidden_states, attention_mask, head_mask[i], encoder_hidden_states, encoder_attention_mask,
-                replace_attention=replace_attention,
-            )
+            if tar_layer is not None and i == tar_layer:
+                layer_outputs = layer_module(
+                    hidden_states, attention_mask, head_mask[i], encoder_hidden_states, encoder_attention_mask,
+                    replace_attention=replace_attention,
+                )
+            else:
+                layer_outputs = layer_module(
+                    hidden_states, attention_mask, head_mask[i], encoder_hidden_states, encoder_attention_mask,
+                )
             hidden_states = layer_outputs[0]
 
             if self.output_attentions:
@@ -423,20 +435,21 @@ class BertSelfAttention(nn.Module):
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
-        # attention matrix를 주어진 다른 matrix로 대체
-        if replace_attention is not None:
-            attention_probs = replace_attention
-        else:
+        if replace_attention is None:
             # Take the dot product between "query" and "key" to get the raw attention scores.
             attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
             attention_scores = attention_scores / math.sqrt(self.attention_head_size)
             if attention_mask is not None:
-            #     # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
-            #     attention_scores = attention_scores + attention_mask
+                # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+                # attention_scores = attention_scores + attention_mask
                 attention_scores = attention_scores * torch.ge(attention_mask, 0).float() + attention_mask
-            #
-            # # Normalize the attention scores to probabilities.
+            
+            # Normalize the attention scores to probabilities.
             attention_probs = nn.Softmax(dim=-1)(attention_scores)
+
+        else:
+            # attention matrix를 주어진 다른 matrix로 대체
+            attention_probs = replace_attention
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
