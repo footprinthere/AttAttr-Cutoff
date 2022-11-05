@@ -679,7 +679,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin):
             else:
                 # Load from our TensorFlow 2.0 checkpoints
                 try:
-                    from transformers import load_tf2_checkpoint_in_pytorch_model
+                    from transformers_cutoff import load_tf2_checkpoint_in_pytorch_model
 
                     model = load_tf2_checkpoint_in_pytorch_model(model, resolved_archive_file, allow_missing_keys=True)
                 except ImportError:
