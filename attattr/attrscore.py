@@ -1,6 +1,11 @@
-import random
-import json
+import sys
 import os
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
+import random
+import logging
+import json
 
 import numpy as np
 import torch
@@ -12,6 +17,13 @@ from transformers_cutoff import (
 
 from modeling_roberta import RobertaForSequenceClassification
 from classifier_processer import MnliProcessor, InputFeatures
+
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+    datefmt='%m/%d/%Y %H:%M:%S',
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 
 class ModelInput:

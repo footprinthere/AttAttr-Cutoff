@@ -3,19 +3,15 @@ import math
 import torch
 from torch import nn
 
-from transformers import (
-    BertPreTrainedModel,
-)
 from transformers_cutoff.modeling_bert import (
+    BertPreTrainedModel,
     BertPooler,
     BertEmbeddings,
     BertIntermediate,
     BertOutput,
     BertSelfOutput,
 )
-from transformers.modeling_utils import (
-    prune_linear_layer,
-)
+from transformers_cutoff.modeling_utils import prune_linear_layer
 
 class BertModel(BertPreTrainedModel):
     r"""
