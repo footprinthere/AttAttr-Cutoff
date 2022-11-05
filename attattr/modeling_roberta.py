@@ -22,10 +22,10 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-from transformers.configuration_roberta import RobertaConfig
-from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_callable
-from transformers.modeling_bert import BertEmbeddings, BertPreTrainedModel
-from transformers.modeling_utils import create_position_ids_from_input_ids
+from transformers_cutoff.configuration_roberta import RobertaConfig
+from transformers_cutoff.file_utils import add_start_docstrings, add_start_docstrings_to_callable
+from transformers_cutoff.modeling_bert import BertEmbeddings, BertPreTrainedModel
+from transformers_cutoff.modeling_utils import create_position_ids_from_input_ids
 
 from .modeling_bert import BertModel
 

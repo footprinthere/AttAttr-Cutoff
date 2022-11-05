@@ -5,12 +5,12 @@ import os
 import numpy as np
 import torch
 
-from transformers import (
-    RobertaForSequenceClassification,
+from transformers_cutoff import (
     RobertaConfig,
     RobertaTokenizer,
 )
 
+from modeling_roberta import RobertaForSequenceClassification
 from classifier_processer import MnliProcessor, InputFeatures
 
 

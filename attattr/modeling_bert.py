@@ -6,7 +6,7 @@ from torch import nn
 from transformers import (
     BertPreTrainedModel,
 )
-from transformers.modeling_bert import (
+from transformers_cutoff.modeling_bert import (
     BertPooler,
     BertEmbeddings,
     BertIntermediate,
