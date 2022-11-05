@@ -48,6 +48,7 @@ def main():
         attention_mask=inputs['attention_mask'],
         labels=inputs['labels'],
     )
+    # 입력되는 모든 tensor의 첫 번째 차원(batch_size)은 1이어야 함에 유의
 
     # Attribution score generator 선언
     generator = AttrScoreGenerator(

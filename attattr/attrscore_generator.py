@@ -67,6 +67,11 @@ class AttrScoreGenerator:
         Returns: `num_layers * [(num_heads, input_len, input_len)]`
         """
 
+        assert inputs.input_ids.size(0) == 1, "The input batch size should be 1"
+        assert inputs.token_type_ids is None or inputs.token_type_ids.size(0) == 1, "The input batch size should be 1"
+        assert inputs.attention_mask.size(0) == 1, "The input batch size should be 1"
+        assert inputs.labels.size(0) == 1, "The input batch size should be 1"
+
         num_layers, num_heads = 12, 12
         input_len = inputs.input_len
         padded_len = inputs.input_ids.size(-1)
