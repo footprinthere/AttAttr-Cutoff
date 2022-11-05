@@ -355,10 +355,10 @@ def main():
             baseline = model(input_ids, segment_ids, input_mask, label_ids, -tar_layer-1)[0]
             baseline = baseline.data
         scale_att, step = scaled_input(att.data, args.batch_size, args.num_batch, baseline)
-        # scale_att: 입력된 attribution matrix와 baseline의 차이를 계산해서, batch_size*num_batch(=:N)로
+        # scale_att: 입력된 attribution matrix와 baseline의 차이를 계산해서, batch_size*num_batch(=:m)로
         #       나눈 뒤 거기에 다시 1부터 N까지의 수를 차례로 곱해서 그 결과들을 cat으로 연결한 것.
         #       default가 "baseline = zero tensor"이므로, (1/m)A부터 (m/m)A=A까지를 연결해놓은 것에 해당.
-        #       [N, num_heads, seq_len, seq_len]
+        #       [m, num_heads, seq_len, seq_len]
         # step: 앞에서 계산한 차이를 N으로 나눈 것. baseline이 zero일 때 (1/m)A에 해당.
         scale_att.requires_grad_(True)
 
