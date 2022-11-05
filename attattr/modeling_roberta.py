@@ -32,16 +32,6 @@ from modeling_bert import BertModel
 
 logger = logging.getLogger(__name__)
 
-# ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP = {
-#     "roberta-base": "bert/roberta-base-pytorch_model.bin",
-#     "roberta-large": "bert/roberta-large-pytorch_model.bin",
-#     "roberta-base-mnli": "bert/roberta-base-mnli-pytorch_model.bin",
-#     "roberta-large-mnli": "bert/roberta-large-mnli-pytorch_model.bin",
-#     "distilroberta-base": "https://cdn.huggingface.co/distilroberta-base-pytorch_model.bin",
-#     "roberta-base-openai-detector": "https://cdn.huggingface.co/roberta-base-openai-detector-pytorch_model.bin",
-#     "roberta-large-openai-detector": "https://cdn.huggingface.co/roberta-large-openai-detector-pytorch_model.bin",
-# }
-
 ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "roberta-base": "https://cdn.huggingface.co/roberta-base-pytorch_model.bin",
     "roberta-large": "https://cdn.huggingface.co/roberta-large-pytorch_model.bin",
@@ -50,7 +40,6 @@ ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "roberta-base-openai-detector": "https://cdn.huggingface.co/roberta-base-openai-detector-pytorch_model.bin",
     "roberta-large-openai-detector": "https://cdn.huggingface.co/roberta-large-openai-detector-pytorch_model.bin",
 }
-
 
 
 class RobertaEmbeddings(BertEmbeddings):
