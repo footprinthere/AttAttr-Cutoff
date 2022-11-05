@@ -1,2 +1,2 @@
-from attrscore import AttrScoreGenerator
+from attattr.attrscore_generator import AttrScoreGenerator
 from model_input import ModelInput

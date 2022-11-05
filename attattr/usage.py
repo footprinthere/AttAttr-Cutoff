@@ -1,5 +1,5 @@
 import os
-from attattr.attrscore import AttrScoreGenerator
+from attattr.attrscore_generator import AttrScoreGenerator
 from model_input import ModelInput
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
