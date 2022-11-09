@@ -22,10 +22,10 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-from .configuration_roberta import RobertaConfig
-from .file_utils import add_start_docstrings, add_start_docstrings_to_callable
-from .modeling_bert import BertEmbeddings, BertLayerNorm, BertModel, BertPreTrainedModel, gelu
-from .modeling_utils import create_position_ids_from_input_ids
+from configuration_roberta import RobertaConfig
+from file_utils import add_start_docstrings, add_start_docstrings_to_callable
+from modeling_bert import BertEmbeddings, BertLayerNorm, BertModel, BertPreTrainedModel, gelu
+from modeling_utils import create_position_ids_from_input_ids
 
 
 logger = logging.getLogger(__name__)
