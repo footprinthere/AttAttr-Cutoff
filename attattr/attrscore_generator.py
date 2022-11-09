@@ -12,8 +12,7 @@ import torch
 
 from transformers_cutoff import RobertaConfig
 
-from model_input import ModelInput
-from modeling_roberta import RobertaForSequenceClassification
+from .modeling_roberta import RobertaForSequenceClassification
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
