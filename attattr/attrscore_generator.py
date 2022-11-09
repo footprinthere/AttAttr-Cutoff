@@ -60,7 +60,7 @@ class AttrScoreGenerator:
 
         self.__prepare_model()
 
-    def genereate_attrscore(self, inputs):
+    def generate_attrscore(self, inputs):
         """
         input을 받아서 그에 대한 self-attention attribution score를 산출함.
         Returns: `num_layers * [(num_heads, input_len, input_len)]`

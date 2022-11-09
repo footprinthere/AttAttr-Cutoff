@@ -58,7 +58,7 @@ def main():
     )
 
     # Attribution score 생성
-    attribution = generator.genereate_attrscore(model_input)
+    attribution = generator.generate_attrscore(model_input)
 
     for i in range(len(attribution)):
         print(i)
