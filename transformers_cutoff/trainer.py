@@ -643,18 +643,22 @@ class Trainer:
         return input_embeds, input_masks
 
     def get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
+        # Add batch_size dimension (=1)
         input_ids = input_ids.unsqueeze(dim=0)
         if token_type_ids is not None:
             token_type_ids = token_type_ids.unsqueeze(dim=0)
         attention_mask = attention_mask.unsqueeze(dim=0)
         labels = labels.unsqueeze(dim=0)
 
+        # Pack model input datas
         inputs = ModelInput(
             input_ids=input_ids,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
             labels=labels,
         )
+
+        # Initialize attribution score generator
         path_task = self.args.task_name.upper()
         if path_task == "COLA": path_task = "CoLA"
         genattr = AttrScoreGenerator(
@@ -664,7 +668,7 @@ class Trainer:
         )
 
         return genattr.genereate_attrscore(inputs)
-        # output: num_layers * [num_heads, input_len, input_len]
+        # num_layers * [num_heads, input_len, input_len]
 
     # TODO:
     def generate_token_cutoff_embedding(self, embeds, attention_mask, token_type_ids, input_lens, labels):
@@ -675,13 +679,14 @@ class Trainer:
 
             cutoff_embed = embeds[i]
             cutoff_mask = attention_mask[i]
+            cutoff_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
             tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
 
             # get att-attr score/ tensor -> cls attr vector
             attr = self.get_attribution(
                 input_ids=cutoff_embed,
-                token_type_ids=token_type_ids,
-                attention_mask=attention_mask,
+                token_type_ids=cutoff_token_type_ids,
+                attention_mask=cutoff_mask,
                 labels=labels[i],
             )
             attr = torch.stack(attr).mean(dim=1)
@@ -849,7 +854,7 @@ class Trainer:
         labels = inputs.get('labels', None)
         embeds = model.get_embedding_output(input_ids=input_ids, token_type_ids=token_type_ids)
 
-        masks = inputs['attention_mask']
+        masks = inputs['attention_mask']    # [batch_size, max_len]
         input_lens = torch.sum(masks, dim=1)
 
         input_embeds, input_masks = self.generate_token_cutoff_embedding(
