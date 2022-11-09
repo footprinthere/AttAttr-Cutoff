@@ -642,7 +642,7 @@ class Trainer:
 
         return input_embeds, input_masks
 
-    def get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
+    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
         # Add batch_size dimension (=1)
         input_ids = input_ids.unsqueeze(dim=0)
         if token_type_ids is not None:
@@ -683,7 +683,7 @@ class Trainer:
             tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
 
             # get att-attr score/ tensor -> cls attr vector
-            attr = self.get_attribution(
+            attr = self._get_attribution(
                 input_ids=cutoff_embed,
                 token_type_ids=cutoff_token_type_ids,
                 attention_mask=cutoff_mask,
