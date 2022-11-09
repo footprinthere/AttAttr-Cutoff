@@ -6,7 +6,7 @@
 export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
 export NUM_GPU=$2
-export BATCH_SIZE=$3
+export BATCH_SIZE=16
 export CUTOFF_TYPE="token"
 
 export PYTHONPAHT=`pwd`
