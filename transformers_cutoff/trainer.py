@@ -33,7 +33,7 @@ from utils import report_results
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from attattr import AttrScoreGenerator
+from attattr import AttrScoreGenerator, ModelInput
 
 try:
     from apex import amp
@@ -643,9 +643,20 @@ class Trainer:
         return input_embeds, input_masks
 
     def get_attribution(self, embed):
-        genattr = AttrScoreGenerator(self.model, self.args.task_name, )
-        return genattr.genereate_attrscore(embed)
-        ...     # output: num_layers * [num_heads, input_len, input_len]
+        inputs = ModelInput(
+            input_ids=embed,
+            token_type_ids=None,
+            attention_mask=None,
+            labels=None,
+        )
+        genattr = AttrScoreGenerator(
+            model_name=self.model,
+            task_name=self.args.task_name,
+            model_file=None,
+        )
+
+        return genattr.genereate_attrscore(inputs)
+        # output: num_layers * [num_heads, input_len, input_len]
 
     # TODO:
     def generate_token_cutoff_embedding(self, embeds, masks, input_lens):
