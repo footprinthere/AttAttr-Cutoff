@@ -649,7 +649,7 @@ class Trainer:
             attention_mask=attention_mask,
             labels=labels,
         )
-        path_task = self.args.task_name.upper();
+        path_task = self.args.task_name.upper()
         if path_task == "COLA": path_task = "CoLA"
         genattr = AttrScoreGenerator(
             model_name=self.model,
