@@ -652,7 +652,7 @@ class Trainer:
         genattr = AttrScoreGenerator(
             model_name=self.model,
             task_name=self.args.task_name,
-            model_file=None,    # TODO: Checkpoint path
+            model_file="/home/jovyan/work/checkpoint/{self.args.task_name}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
         )
 
         return genattr.genereate_attrscore(inputs)
@@ -676,7 +676,7 @@ class Trainer:
                 attention_mask=attention_mask,
                 labels=labels,
             )
-            attr = torch.stack(attr).mean(dim=0)
+            attr = torch.stack(attr).mean(dim=1)
             # attr_layer_mean = attr.mean(dim=0)
             attr_layer_max = attr.max(dim=0).values
             cls_attr = attr_layer_max[0]

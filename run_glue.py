@@ -161,6 +161,7 @@ def main():
     # training_args.do_aug = model_args.do_aug
     # training_args.aug_type = data_args.aug_type
     # Initialize our Trainer
+    training_args.task_name = data_args.task_name
     trainer = Trainer(
         model=model,
         args=training_args,
