@@ -168,6 +168,8 @@ class Trainer:
     global_step: Optional[int] = None
     epoch: Optional[float] = None
 
+    attr_generator: Optional[AttrScoreGenerator] = None
+
     def __init__(
         self,
         model: PreTrainedModel,
@@ -226,6 +228,21 @@ class Trainer:
             # Set an xla_device flag on the model's config.
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
+
+        self._initialize_attr_generator()
+
+    # TODO:
+    def _initialize_attr_generator(self):
+        # Initialize attribution score generator
+        task_dir = self.args.task_name.upper()
+        if task_dir == "COLA":
+            task_dir = "CoLA"
+
+        self.attr_generator = AttrScoreGenerator(
+            model_name=self.args.model_name_or_path,
+            task_name=self.args.task_name,
+            model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
+        )
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -643,26 +660,6 @@ class Trainer:
         return input_embeds, input_masks
 
     # TODO:
-    def _get_attribution(self, generator, input_ids, token_type_ids, attention_mask, labels):
-        # Add batch_size dimension (=1)
-        input_ids = input_ids.unsqueeze(dim=0)
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.unsqueeze(dim=0)
-        attention_mask = attention_mask.unsqueeze(dim=0)
-        labels = labels.unsqueeze(dim=0)
-
-        # Pack model input datas
-        inputs = ModelInput(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-        )
-
-        return generator.genereate_attrscore(inputs)
-        # num_layers * [num_heads, input_len, input_len]
-
-    # TODO:
     def generate_token_cutoff_embedding(
         self, 
         embeds, 
@@ -677,19 +674,9 @@ class Trainer:
         
         batch_size = embeds.size(0)
 
-        # Initialize attribution score generator
-        task_dir = self.args.task_name.upper()
-        if task_dir == "COLA":
-            task_dir = "CoLA"
-
-        generator = AttrScoreGenerator(
-            model_name=self.args.model_name_or_path,
-            task_name=self.args.task_name,
-            model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
-        )
-
         # Iterate on each example in batch
-        for i in range(batch_size):
+        batch_iter = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        for i in batch_iter:
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
             example_input_ids = input_ids[i]
@@ -697,7 +684,6 @@ class Trainer:
             example_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
             
             attr = self._get_attribution(
-                generator=generator,
                 input_ids=example_input_ids,
                 token_type_ids=example_token_type_ids,
                 attention_mask=example_mask,
@@ -724,6 +710,26 @@ class Trainer:
         input_masks = torch.stack(input_masks, dim=0)
 
         return input_embeds, input_masks
+
+    # TODO:
+    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
+        # Add batch_size dimension (=1)
+        input_ids = input_ids.unsqueeze(dim=0)
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.unsqueeze(dim=0)
+        attention_mask = attention_mask.unsqueeze(dim=0)
+        labels = labels.unsqueeze(dim=0)
+
+        # Pack model input datas
+        inputs = ModelInput(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
+
+        return self.attr_generator.generate_attrscore(inputs)
+        # num_layers * [num_heads, input_len, input_len]
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
