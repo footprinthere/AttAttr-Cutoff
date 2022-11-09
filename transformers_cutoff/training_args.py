@@ -51,7 +51,7 @@ class TrainingArguments:
         },
     )
 
-    task_name: str = field(default = None, metadata={"help": "task name."})
+    # task_name: str = field(default = None, metadata={"help": "task name."})
 
     do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})

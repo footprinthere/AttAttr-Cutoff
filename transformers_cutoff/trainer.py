@@ -644,17 +644,17 @@ class Trainer:
 
     def get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
         inputs = ModelInput(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask,
-            labels=labels,
+            input_ids=input_ids.unsqueeze(dim=0),
+            token_type_ids=token_type_ids.unsqueeze(dim=0),
+            attention_mask=attention_mask.unsqueeze(dim=0),
+            labels=labels.unsqueeze(dim=0),
         )
         path_task = self.args.task_name.upper()
         if path_task == "COLA": path_task = "CoLA"
         genattr = AttrScoreGenerator(
-            model_name=self.model,
+            model_name='roberta-base',
             task_name=self.args.task_name,
-            model_file="/home/jovyan/work/checkpoint/{path_task}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
+            model_file=f"/home/jovyan/work/checkpoint/{path_task}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
         )
 
         return genattr.genereate_attrscore(inputs)
@@ -676,7 +676,7 @@ class Trainer:
                 input_ids=cutoff_embed,
                 token_type_ids=token_type_ids,
                 attention_mask=attention_mask,
-                labels=labels,
+                labels=labels[i],
             )
             attr = torch.stack(attr).mean(dim=1)
             # attr_layer_mean = attr.mean(dim=0)
