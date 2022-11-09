@@ -649,10 +649,12 @@ class Trainer:
             attention_mask=attention_mask,
             labels=labels,
         )
+        path_task = self.args.task_name.upper();
+        if path_task == "COLA": path_task = "CoLA"
         genattr = AttrScoreGenerator(
             model_name=self.model,
             task_name=self.args.task_name,
-            model_file="/home/jovyan/work/checkpoint/{self.args.task_name}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
+            model_file="/home/jovyan/work/checkpoint/{path_task}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
         )
 
         return genattr.genereate_attrscore(inputs)
