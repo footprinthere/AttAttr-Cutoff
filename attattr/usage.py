@@ -1,6 +1,6 @@
 import os
-from attattr.attrscore_generator import AttrScoreGenerator
-from model_input import ModelInput
+from .attrscore_generator import AttrScoreGenerator
+from .model_input import ModelInput
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
 from transformers_cutoff.data.data_collator import DefaultDataCollator
