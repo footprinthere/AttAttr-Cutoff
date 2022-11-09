@@ -9,6 +9,8 @@ export NUM_GPU=$2
 export BATCH_SIZE=$3
 export CUTOFF_TYPE="token"
 
+export PYTHONPAHT=`pwd`
+
 CUDA_VISIBLE_DEVICES=$NUM_GPU \
 python run_glue.py \
   --model_name_or_path roberta-base \
