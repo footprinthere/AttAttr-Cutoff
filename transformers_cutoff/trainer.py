@@ -642,7 +642,8 @@ class Trainer:
 
         return input_embeds, input_masks
 
-    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
+    # TODO:
+    def _get_attribution(self, generator, input_ids, token_type_ids, attention_mask, labels):
         # Add batch_size dimension (=1)
         input_ids = input_ids.unsqueeze(dim=0)
         if token_type_ids is not None:
@@ -658,57 +659,63 @@ class Trainer:
             labels=labels,
         )
 
-        # Initialize attribution score generator
-        path_task = self.args.task_name.upper()
-        if path_task == "COLA": path_task = "CoLA"
-        genattr = AttrScoreGenerator(
-            model_name='roberta-base',
-            task_name=self.args.task_name,
-            model_file=f"/home/jovyan/work/checkpoint/{path_task}/checkpoint_token/pytorch_model.bin",    # TODO: Checkpoint path
-        )
-
-        return genattr.genereate_attrscore(inputs)
+        return generator.genereate_attrscore(inputs)
         # num_layers * [num_heads, input_len, input_len]
 
     # TODO:
-    def generate_token_cutoff_embedding(self, embeds, attention_mask, token_type_ids, input_lens, labels):
+    def generate_token_cutoff_embedding(
+        self, 
+        embeds, 
+        input_ids,
+        token_type_ids,
+        attention_mask,
+        input_lens,
+        labels,
+    ):
         input_embeds = []
         input_masks = []
-        for i in range(embeds.shape[0]):
+        
+        batch_size = embeds.size(0)
+
+        # Initialize attribution score generator
+        task_dir = self.args.task_name.upper()
+        if task_dir == "COLA":
+            task_dir = "CoLA"
+
+        generator = AttrScoreGenerator(
+            model_name=self.args.model_name_or_path,
+            task_name=self.args.task_name,
+            model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
+        )
+
+        # Iterate on each example in batch
+        for i in range(batch_size):
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
-            cutoff_embed = embeds[i]
-            cutoff_mask = attention_mask[i]
-            cutoff_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
-            tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
-
-            # get att-attr score/ tensor -> cls attr vector
+            example_input_ids = input_ids[i]
+            example_mask = attention_mask[i]
+            example_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
+            
             attr = self._get_attribution(
-                input_ids=cutoff_embed,
-                token_type_ids=cutoff_token_type_ids,
-                attention_mask=cutoff_mask,
+                generator=generator,
+                input_ids=example_input_ids,
+                token_type_ids=example_token_type_ids,
+                attention_mask=example_mask,
                 labels=labels[i],
             )
-            attr = torch.stack(attr).mean(dim=1)
-            # attr_layer_mean = attr.mean(dim=0)
-            attr_layer_max = attr.max(dim=0).values
+
+            attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
+            attr_layer_max = attr.max(dim=0).values     # max along layer dimension
             cls_attr = attr_layer_max[0]
-            
-            tmp_mask[torch.topk(cls_attr, cutoff_length, 0, False).indices] = 0
 
-            # zero_index = torch.randint(input_lens[i], (cutoff_length,))
-            
-            # # 0으로 대체할 지점의 index를 랜덤으로 생성
-            # cutoff_embed = embeds[i]
-            # cutoff_mask = masks[i]
+            example_embed = embeds[i]
 
-            # tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
-            # for ind in zero_index:
-            #     tmp_mask[ind] = 0
-            # # 설정된 index 위치를 0으로 대체
+            zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
+            lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
+            zero_mask[lowest_indices] = 0
 
-            cutoff_embed = torch.mul(tmp_mask[:, None], cutoff_embed)
-            cutoff_mask = torch.mul(tmp_mask, cutoff_mask).type(torch.int64)
+            cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
+            cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
@@ -858,7 +865,8 @@ class Trainer:
         input_lens = torch.sum(masks, dim=1)
 
         input_embeds, input_masks = self.generate_token_cutoff_embedding(
-            embeds=embeds, 
+            embeds=embeds,
+            input_ids=input_ids, 
             token_type_ids=token_type_ids,
             attention_mask=masks, 
             input_lens=input_lens,
