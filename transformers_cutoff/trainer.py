@@ -1,5 +1,6 @@
 """ Cutoff: A Simple but Tough-to-Beat Data Augmentation Approach for Natural Language Understanding and Generation.  """
 
+import sys
 import json
 import logging
 import math
@@ -30,6 +31,9 @@ from .training_args import TrainingArguments, is_tpu_available
 from utils import report_results
 
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from attattr import AttrScoreGenerator
 
 try:
     from apex import amp
@@ -638,7 +642,9 @@ class Trainer:
 
         return input_embeds, input_masks
 
-    def get_attribution(embed):
+    def get_attribution(self, embed):
+        genattr = AttrScoreGenerator(self.model, self.args.task_name, )
+        return genattr.genereate_attrscore(embed)
         ...     # output: num_layers * [num_heads, input_len, input_len]
 
     # TODO:
@@ -653,14 +659,12 @@ class Trainer:
             tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
 
             # get att-attr score/ tensor -> cls attr vector
-            attr = self.get_attribution(cutoff_embed).mean(dim=1)
+            attr = torch.stack(self.get_attribution(cutoff_embed)).mean(dim=0)
             # attr_layer_mean = attr.mean(dim=0)
             attr_layer_max = attr.max(dim=0).values
             cls_attr = attr_layer_max[0]
             
-            for j in range(cutoff_length):
-                tmp_mask[cls_attr.argmin()] = 0
-                cls_attr[cls_attr.argmin()] = torch.inf
+            tmp_mask[torch.topk(cls_attr, cutoff_length, 0, False).indices] = 0
 
             # zero_index = torch.randint(input_lens[i], (cutoff_length,))
             
