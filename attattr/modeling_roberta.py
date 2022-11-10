@@ -27,7 +27,7 @@ from transformers_cutoff.file_utils import add_start_docstrings, add_start_docst
 from transformers_cutoff.modeling_bert import BertEmbeddings, BertPreTrainedModel
 from transformers_cutoff.modeling_utils import create_position_ids_from_input_ids
 
-from modeling_bert import BertModel
+from .modeling_bert import BertModel
 
 
 logger = logging.getLogger(__name__)

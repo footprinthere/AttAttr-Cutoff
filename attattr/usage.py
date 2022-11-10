@@ -1,6 +1,6 @@
 import os
-from attattr.attrscore_generator import AttrScoreGenerator
-from model_input import ModelInput
+from .attrscore_generator import AttrScoreGenerator
+from .model_input import ModelInput
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
 from transformers_cutoff.data.data_collator import DefaultDataCollator
@@ -58,7 +58,7 @@ def main():
     )
 
     # Attribution score 생성
-    attribution = generator.genereate_attrscore(model_input)
+    attribution = generator.generate_attrscore(model_input)
 
     for i in range(len(attribution)):
         print(i)

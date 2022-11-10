@@ -1,5 +1,6 @@
 """ Cutoff: A Simple but Tough-to-Beat Data Augmentation Approach for Natural Language Understanding and Generation.  """
 
+import sys
 import json
 import logging
 import math
@@ -30,6 +31,9 @@ from .training_args import TrainingArguments, is_tpu_available
 from utils import report_results
 
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from attattr import AttrScoreGenerator, ModelInput
 
 try:
     from apex import amp
@@ -164,6 +168,8 @@ class Trainer:
     global_step: Optional[int] = None
     epoch: Optional[float] = None
 
+    attr_generator: Optional[AttrScoreGenerator] = None
+
     def __init__(
         self,
         model: PreTrainedModel,
@@ -222,6 +228,21 @@ class Trainer:
             # Set an xla_device flag on the model's config.
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
+
+        self._initialize_attr_generator()
+
+    # TODO:
+    def _initialize_attr_generator(self):
+        # Initialize attribution score generator
+        task_dir = self.args.task_name.upper()
+        if task_dir == "COLA":
+            task_dir = "CoLA"
+
+        self.attr_generator = AttrScoreGenerator(
+            model_name=self.args.model_name_or_path,
+            task_name=self.args.task_name,
+            model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
+        )
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -638,34 +659,49 @@ class Trainer:
 
         return input_embeds, input_masks
 
-    def get_attribution(example):
-        ...     # output: num_layers * [num_heads, input_len, input_len]
-
     # TODO:
-    def generate_token_cutoff_embedding(self, embeds, masks, input_lens):
+    def generate_token_cutoff_embedding(
+        self, 
+        embeds, 
+        input_ids,
+        token_type_ids,
+        attention_mask,
+        input_lens,
+        labels,
+    ):
         input_embeds = []
         input_masks = []
-        for i in range(embeds.shape[0]):
+        
+        batch_size = embeds.size(0)
+
+        # Iterate on each example in batch
+        batch_iter = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        for i in batch_iter:
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
-            for ex_idx in range(embeds.size(0)):
-                example = embeds[ex_idx]
-                attr = self.get_attribution(example)
-                ...
-
-            # zero_index = torch.randint(input_lens[i], (cutoff_length,))
+            example_input_ids = input_ids[i]
+            example_mask = attention_mask[i]
+            example_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
             
-            # # 0으로 대체할 지점의 index를 랜덤으로 생성
-            # cutoff_embed = embeds[i]
-            # cutoff_mask = masks[i]
+            attr = self._get_attribution(
+                input_ids=example_input_ids,
+                token_type_ids=example_token_type_ids,
+                attention_mask=example_mask,
+                labels=labels[i],
+            )
 
-            # tmp_mask = torch.ones(cutoff_embed.shape[0], ).to(self.args.device)
-            # for ind in zero_index:
-            #     tmp_mask[ind] = 0
-            # # 설정된 index 위치를 0으로 대체
+            attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
+            attr_layer_max = attr.max(dim=0).values     # max along layer dimension
+            cls_attr = attr_layer_max[0]
 
-            cutoff_embed = torch.mul(tmp_mask[:, None], cutoff_embed)
-            cutoff_mask = torch.mul(tmp_mask, cutoff_mask).type(torch.int64)
+            example_embed = embeds[i]
+
+            zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
+            lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
+            zero_mask[lowest_indices] = 0
+
+            cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
+            cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
@@ -674,6 +710,26 @@ class Trainer:
         input_masks = torch.stack(input_masks, dim=0)
 
         return input_embeds, input_masks
+
+    # TODO:
+    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
+        # Add batch_size dimension (=1)
+        input_ids = input_ids.unsqueeze(dim=0)
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.unsqueeze(dim=0)
+        attention_mask = attention_mask.unsqueeze(dim=0)
+        labels = labels.unsqueeze(dim=0)
+
+        # Pack model input datas
+        inputs = ModelInput(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
+
+        return self.attr_generator.generate_attrscore(inputs)
+        # num_layers * [num_heads, input_len, input_len]
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
@@ -811,10 +867,17 @@ class Trainer:
         labels = inputs.get('labels', None)
         embeds = model.get_embedding_output(input_ids=input_ids, token_type_ids=token_type_ids)
 
-        masks = inputs['attention_mask']
+        masks = inputs['attention_mask']    # [batch_size, max_len]
         input_lens = torch.sum(masks, dim=1)
 
-        input_embeds, input_masks = self.generate_token_cutoff_embedding(embeds, masks, input_lens)
+        input_embeds, input_masks = self.generate_token_cutoff_embedding(
+            embeds=embeds,
+            input_ids=input_ids, 
+            token_type_ids=token_type_ids,
+            attention_mask=masks, 
+            input_lens=input_lens,
+            labels=labels,
+        )
         cutoff_outputs = model.get_logits_from_embedding_output(embedding_output=input_embeds,
                                                                 attention_mask=input_masks,
                                                                 labels=labels)
