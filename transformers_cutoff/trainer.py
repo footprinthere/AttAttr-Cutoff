@@ -169,6 +169,7 @@ class Trainer:
     epoch: Optional[float] = None
 
     attr_generator: Optional[AttrScoreGenerator] = None
+    saved_cutoff_embeds: Dict[int, tuple] = {}
 
     def __init__(
         self,
@@ -661,7 +662,8 @@ class Trainer:
 
     # TODO:
     def generate_token_cutoff_embedding(
-        self, 
+        self,
+        example_index,
         embeds, 
         input_ids,
         token_type_ids,
@@ -669,14 +671,19 @@ class Trainer:
         input_lens,
         labels,
     ):
+        # Return caculated cutoff embedings if already cached
+        if example_index in self.saved_cutoff_embeds:
+            logger.info("Using cached cutoff embeddings")
+            return self.saved_cutoff_embeds[example_index]
+
         input_embeds = []
         input_masks = []
         
         batch_size = embeds.size(0)
 
         # Iterate on each example in batch
-        batch_iter = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
-        for i in batch_iter:
+        batch_iterator = tqdm(range(batch_size), desc="batch", ascii=True)
+        for i in batch_iterator:
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
             example_input_ids = input_ids[i]
@@ -708,6 +715,9 @@ class Trainer:
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
+
+        # Cache calculated cutoff embeds
+        self.saved_cutoff_embeds.update({example_index: (input_embeds, input_masks)})
 
         return input_embeds, input_masks
 
@@ -853,15 +863,18 @@ class Trainer:
             self, model: nn.Module, inputs: Dict[str, torch.Tensor], optimizer: torch.optim.Optimizer
     ) -> float:
         model.train()
+
+        # Extract example_index first (since it should not be fed to model)
+        example_index = inputs.pop("example_index")
+
         for k, v in inputs.items():
             inputs[k] = v.to(self.args.device)
 
         ori_outputs = model(**inputs)
-        #loss = ori_outputs[0]  # model outputs are always tuple in transformers (see doc)
         loss = 0.0
 
         assert model.__class__ is RobertaForSequenceClassification
-        # if self.args.aug_version == 'v3':     # TrainingArgs에 존재하지 않는 argument라 제거함
+
         input_ids = inputs['input_ids']
         token_type_ids = inputs.get('token_type_ids', None)
         labels = inputs.get('labels', None)
@@ -871,6 +884,7 @@ class Trainer:
         input_lens = torch.sum(masks, dim=1)
 
         input_embeds, input_masks = self.generate_token_cutoff_embedding(
+            example_index=example_index,
             embeds=embeds,
             input_ids=input_ids, 
             token_type_ids=token_type_ids,
