@@ -1106,6 +1106,9 @@ class Trainer:
         for inputs in tqdm(dataloader, desc=description, leave=False):
             has_labels = any(inputs.get(k) is not None for k in ["labels", "lm_labels", "masked_lm_labels"])
 
+            # Extract example_index first (since it should not be fed to model)
+            inputs.pop("example_index")
+
             for k, v in inputs.items():
                 inputs[k] = v.to(self.args.device)
 
