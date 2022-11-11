@@ -13,6 +13,7 @@ import torch
 from transformers_cutoff import RobertaConfig
 
 from .modeling_roberta import RobertaForSequenceClassification
+from .model_input import ModelInput
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -60,7 +61,7 @@ class AttrScoreGenerator:
 
         self.__prepare_model()
 
-    def generate_attrscore(self, inputs):
+    def generate_attrscore(self, inputs: ModelInput):
         """
         input을 받아서 그에 대한 self-attention attribution score를 산출함.
         Returns: `num_layers * [(num_heads, input_len, input_len)]`
