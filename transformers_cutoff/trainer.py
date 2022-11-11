@@ -694,13 +694,15 @@ class Trainer:
         batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
         for i in batch_iterator:
             example_index = example_indices[i]
+            example_embed = embeds[i]
+            example_mask = attention_mask[i]
 
             if epoch == 0:
                 cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
                 # Unsqueeze to keep batch dimesion (=1)
                 example_input_ids = input_ids[i].unsqueeze(0)
-                example_mask = attention_mask[i].unsqueeze(0)
+                example_mask = example_mask.unsqueeze(0)
                 example_token_type_ids = token_type_ids[i].unsqueeze(0) if token_type_ids is not None else None
                 example_labels = labels[i].unsqueeze(0)
 
@@ -713,15 +715,15 @@ class Trainer:
                 )
                 attr = self.attr_generator.generate_attrscore(model_inputs)
 
+                example_mask = example_mask.squeeze(0)
+
                 attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
                 attr_layer_max = attr.max(dim=0).values     # max along layer dimension
                 cls_attr = attr_layer_max[0]
-
-                example_embed = embeds[i]
-
                 
                 lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
 
+                # Caching
                 cutoff_indices = lowest_indices.cpu().numpy()
                 self.saved_cutoff_idx[example_index, :len(cutoff_indices)] = cutoff_indices
 
@@ -735,7 +737,7 @@ class Trainer:
             zero_mask[lowest_indices] = 0
 
             cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
-            cutoff_mask = torch.mul(zero_mask, example_mask.squeeze(0)).type(torch.int64)
+            cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
