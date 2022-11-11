@@ -516,7 +516,7 @@ class Trainer:
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = tqdm(train_dataloader, desc=f"Epoch-{epoch}", disable=not self.is_local_master())
-            self._initialize_cutoff_index_array(len(train_dataloader))
+            self._initialize_cutoff_index_array(len(train_dataloader.dataset))
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -722,7 +722,7 @@ class Trainer:
                 
                 lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
 
-                cutoff_indices = lowest_indices.numpy()
+                cutoff_indices = lowest_indices.cpu().numpy()
                 self.saved_cutoff_idx[example_index, :len(cutoff_indices)] = cutoff_indices
 
             else:
