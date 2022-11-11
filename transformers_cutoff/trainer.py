@@ -33,7 +33,7 @@ from utils import report_results
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from attattr import AttrScoreGenerator, ModelInput
+from attattr import AttrScoreGenerator, BatchedAttrScoreGenerator, ModelInput
 
 try:
     from apex import amp
@@ -168,6 +168,7 @@ class Trainer:
     global_step: Optional[int] = None
     epoch: Optional[float] = None
 
+    batched_attr: bool = False
     attr_generator: Optional[AttrScoreGenerator] = None
     saved_cutoff_embeds: Dict[int, tuple] = {}
 
@@ -230,16 +231,21 @@ class Trainer:
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
 
-        self._initialize_attr_generator()
+        self._initialize_attr_generator(batched=self.batched_attr)
 
     # TODO:
-    def _initialize_attr_generator(self):
+    def _initialize_attr_generator(self, batched=False):
         # Initialize attribution score generator
         task_dir = self.args.task_name.upper()
         if task_dir == "COLA":
             task_dir = "CoLA"
 
-        self.attr_generator = AttrScoreGenerator(
+        if batched:
+            generator_class = BatchedAttrScoreGenerator
+        else:
+            generator_class = AttrScoreGenerator
+
+        self.attr_generator = generator_class(
             model_name=self.args.model_name_or_path,
             task_name=self.args.task_name,
             model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
@@ -686,16 +692,20 @@ class Trainer:
         for i in batch_iterator:
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
-            example_input_ids = input_ids[i]
-            example_mask = attention_mask[i]
-            example_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
-            
-            attr = self._get_attribution(
+            # Unsqueeze to keep batch dimesion (=1)
+            example_input_ids = input_ids[i].unsqueeze(0)
+            example_mask = attention_mask[i].unsqueeze(0)
+            example_token_type_ids = token_type_ids[i].unsqueeze(0) if token_type_ids is not None else None
+            example_labels = labels[i].unsqueeze(0)
+
+            # Generate attribution score
+            model_inputs = ModelInput(
                 input_ids=example_input_ids,
                 token_type_ids=example_token_type_ids,
                 attention_mask=example_mask,
-                labels=labels[i],
+                labels=example_labels,
             )
+            attr = self.attr_generator.generate_attrscore(model_inputs)
 
             attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
             attr_layer_max = attr.max(dim=0).values     # max along layer dimension
@@ -708,7 +718,7 @@ class Trainer:
             zero_mask[lowest_indices] = 0
 
             cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
-            cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
+            cutoff_mask = torch.mul(zero_mask, example_mask.squeeze(0)).type(torch.int64)
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
@@ -721,25 +731,39 @@ class Trainer:
 
         return input_embeds, input_masks
 
-    # TODO:
-    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
-        # Add batch_size dimension (=1)
-        input_ids = input_ids.unsqueeze(dim=0)
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.unsqueeze(dim=0)
-        attention_mask = attention_mask.unsqueeze(dim=0)
-        labels = labels.unsqueeze(dim=0)
+    def generate_token_cutoff_embedding_batched(
+        self,
+        example_index,
+        embeds, 
+        input_ids,
+        token_type_ids,
+        attention_mask,
+        input_lens,
+        labels,
+    ):
+        # Return caculated cutoff embedings if already cached
+        if example_index in self.saved_cutoff_embeds:
+            logger.info("Using cached cutoff embeddings")
+            return self.saved_cutoff_embeds[example_index]
 
-        # Pack model input datas
-        inputs = ModelInput(
+        input_embeds = []
+        input_masks = []
+        
+        # Generate attribution score
+        model_inputs = ModelInput(
             input_ids=input_ids,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
             labels=labels,
         )
+        attr = self.attr_generator(model_inputs)
+        # attr: num_layers * [batch_size, num_heads, input_len, input_len]
 
-        return self.attr_generator.generate_attrscore(inputs)
-        # num_layers * [num_heads, input_len, input_len]
+        # TODO:
+        # 현재 ModelInput에서 input_len을 계산하는 부분 수정 필요 (example마다 각각 계산)
+        # cutoff는 어차피 example마다 따로 수행해야 함
+        # 정말 효율성이 개선될까?
+        raise NotImplementedError
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
