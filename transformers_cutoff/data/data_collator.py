@@ -68,7 +68,7 @@ class DefaultDataCollator(DataCollator):
         else:
             batch = {}
 
-        batch["example_index"] = first.example_index
+        batch["example_indices"] = [f.example_index for f in features]
 
         # Handling of all other possible attributes.
         # Again, we will use the first element to figure out which key/values are not None for this model.
