@@ -29,5 +29,5 @@ python run_glue.py \
   --logging_steps 500 \
   --save_steps 500 \
   --per_gpu_train_batch_size $BATCH_SIZE \
-  --output_dir results/$TASK_NAME-${CUTOFF_TYPE}-cutoff-attr \
+  --output_dir results/$TASK_NAME-${CUTOFF_TYPE}-cutoff-attr-cache \
   --overwrite_output_dir

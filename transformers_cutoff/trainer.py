@@ -33,7 +33,7 @@ from utils import report_results
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from attattr import AttrScoreGenerator, ModelInput
+from attattr import AttrScoreGenerator, BatchedAttrScoreGenerator, ModelInput
 
 try:
     from apex import amp
@@ -168,7 +168,10 @@ class Trainer:
     global_step: Optional[int] = None
     epoch: Optional[float] = None
 
+    batched_attr: bool = False
     attr_generator: Optional[AttrScoreGenerator] = None
+    # saved_cutoff_embeds: Dict[int, tuple] = {}
+    saved_cutoff_idx = None
 
     def __init__(
         self,
@@ -229,20 +232,30 @@ class Trainer:
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
 
-        self._initialize_attr_generator()
+        self._initialize_attr_generator(batched=self.batched_attr)
 
     # TODO:
-    def _initialize_attr_generator(self):
+    def _initialize_attr_generator(self, batched=False):
         # Initialize attribution score generator
         task_dir = self.args.task_name.upper()
         if task_dir == "COLA":
             task_dir = "CoLA"
 
-        self.attr_generator = AttrScoreGenerator(
+        if batched:
+            generator_class = BatchedAttrScoreGenerator
+        else:
+            generator_class = AttrScoreGenerator
+
+        self.attr_generator = generator_class(
             model_name=self.args.model_name_or_path,
             task_name=self.args.task_name,
             model_file=f"/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin",
         )
+
+    def _initialize_cutoff_index_array(self, dataset_size: int):
+        max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
+        self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
+        self.saved_cutoff_idx.fill(-1)
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -503,6 +516,7 @@ class Trainer:
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = tqdm(train_dataloader, desc=f"Epoch-{epoch}", disable=not self.is_local_master())
+            self._initialize_cutoff_index_array(len(train_dataloader.dataset))
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -514,7 +528,7 @@ class Trainer:
                     if self.args.aug_type == 'span_cutoff':
                         step_loss = self._training_step_with_span_cutoff(model, inputs, optimizer)
                     elif self.args.aug_type == 'token_cutoff':
-                        step_loss = self._training_step_with_token_cutoff(model, inputs, optimizer)
+                        step_loss = self._training_step_with_token_cutoff(model, inputs, optimizer, epoch)
                     elif self.args.aug_type == 'dim_cutoff':
                         step_loss = self._training_step_with_dim_cutoff(model, inputs, optimizer)
                     else:
@@ -661,47 +675,67 @@ class Trainer:
 
     # TODO:
     def generate_token_cutoff_embedding(
-        self, 
+        self,
+        example_indices: List[int],
         embeds, 
         input_ids,
         token_type_ids,
         attention_mask,
         input_lens,
         labels,
+        epoch: int,
     ):
+
         input_embeds = []
         input_masks = []
-        
-        batch_size = embeds.size(0)
 
         # Iterate on each example in batch
-        batch_iter = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
-        for i in batch_iter:
-            cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
+        batch_size = embeds.size(0)
+        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        for i in batch_iterator:
+            example_index = example_indices[i]
 
-            example_input_ids = input_ids[i]
-            example_mask = attention_mask[i]
-            example_token_type_ids = token_type_ids[i] if token_type_ids is not None else None
-            
-            attr = self._get_attribution(
-                input_ids=example_input_ids,
-                token_type_ids=example_token_type_ids,
-                attention_mask=example_mask,
-                labels=labels[i],
-            )
+            if epoch == 0:
+                cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
-            attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
-            attr_layer_max = attr.max(dim=0).values     # max along layer dimension
-            cls_attr = attr_layer_max[0]
+                # Unsqueeze to keep batch dimesion (=1)
+                example_input_ids = input_ids[i].unsqueeze(0)
+                example_mask = attention_mask[i].unsqueeze(0)
+                example_token_type_ids = token_type_ids[i].unsqueeze(0) if token_type_ids is not None else None
+                example_labels = labels[i].unsqueeze(0)
 
-            example_embed = embeds[i]
+                # Generate attribution score
+                model_inputs = ModelInput(
+                    input_ids=example_input_ids,
+                    token_type_ids=example_token_type_ids,
+                    attention_mask=example_mask,
+                    labels=example_labels,
+                )
+                attr = self.attr_generator.generate_attrscore(model_inputs)
+
+                attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
+                attr_layer_max = attr.max(dim=0).values     # max along layer dimension
+                cls_attr = attr_layer_max[0]
+
+                example_embed = embeds[i]
+
+                
+                lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
+
+                cutoff_indices = lowest_indices.cpu().numpy()
+                self.saved_cutoff_idx[example_index, :len(cutoff_indices)] = cutoff_indices
+
+            else:
+                # lowest_indices already cached
+                cutoff_indices = self.saved_cutoff_idx[example_index]
+                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]
+                lowest_indices = torch.LongTensor(cutoff_indices)
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
-            lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
             zero_mask[lowest_indices] = 0
 
             cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
-            cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
+            cutoff_mask = torch.mul(zero_mask, example_mask.squeeze(0)).type(torch.int64)
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
@@ -709,27 +743,26 @@ class Trainer:
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
 
+        # # Cache calculated cutoff embeds
+        # self.saved_cutoff_embeds.update({example_indices: (input_embeds, input_masks)})
+
         return input_embeds, input_masks
 
-    # TODO:
-    def _get_attribution(self, input_ids, token_type_ids, attention_mask, labels):
-        # Add batch_size dimension (=1)
-        input_ids = input_ids.unsqueeze(dim=0)
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.unsqueeze(dim=0)
-        attention_mask = attention_mask.unsqueeze(dim=0)
-        labels = labels.unsqueeze(dim=0)
-
-        # Pack model input datas
-        inputs = ModelInput(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-        )
-
-        return self.attr_generator.generate_attrscore(inputs)
-        # num_layers * [num_heads, input_len, input_len]
+    def generate_token_cutoff_embedding_batched(
+        self,
+        example_indices,
+        embeds, 
+        input_ids,
+        token_type_ids,
+        attention_mask,
+        input_lens,
+        labels,
+    ):
+        # TODO:
+        # 현재 ModelInput에서 input_len을 계산하는 부분 수정 필요 (example마다 각각 계산)
+        # cutoff는 어차피 example마다 따로 수행해야 함
+        # 정말 효율성이 개선될까?
+        raise NotImplementedError
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
@@ -850,18 +883,21 @@ class Trainer:
         return self._resolve_loss_item(loss, optimizer)
 
     def _training_step_with_token_cutoff(
-            self, model: nn.Module, inputs: Dict[str, torch.Tensor], optimizer: torch.optim.Optimizer
+            self, model: nn.Module, inputs: Dict[str, torch.Tensor], optimizer: torch.optim.Optimizer, epoch: int
     ) -> float:
         model.train()
+
+        # Extract example_indices first (since it should not be fed to model)
+        example_indices = inputs.pop("example_indices")
+
         for k, v in inputs.items():
             inputs[k] = v.to(self.args.device)
 
         ori_outputs = model(**inputs)
-        #loss = ori_outputs[0]  # model outputs are always tuple in transformers (see doc)
         loss = 0.0
 
         assert model.__class__ is RobertaForSequenceClassification
-        # if self.args.aug_version == 'v3':     # TrainingArgs에 존재하지 않는 argument라 제거함
+
         input_ids = inputs['input_ids']
         token_type_ids = inputs.get('token_type_ids', None)
         labels = inputs.get('labels', None)
@@ -871,12 +907,14 @@ class Trainer:
         input_lens = torch.sum(masks, dim=1)
 
         input_embeds, input_masks = self.generate_token_cutoff_embedding(
+            example_indices=example_indices,
             embeds=embeds,
             input_ids=input_ids, 
             token_type_ids=token_type_ids,
             attention_mask=masks, 
             input_lens=input_lens,
             labels=labels,
+            epoch=epoch,
         )
         cutoff_outputs = model.get_logits_from_embedding_output(embedding_output=input_embeds,
                                                                 attention_mask=input_masks,
@@ -1091,6 +1129,9 @@ class Trainer:
 
         for inputs in tqdm(dataloader, desc=description, leave=False):
             has_labels = any(inputs.get(k) is not None for k in ["labels", "lm_labels", "masked_lm_labels"])
+
+            # Extract example_indices first (since it should not be fed to model)
+            inputs.pop("example_indices")
 
             for k, v in inputs.items():
                 inputs[k] = v.to(self.args.device)

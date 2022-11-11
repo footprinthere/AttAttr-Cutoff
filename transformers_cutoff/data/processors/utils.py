@@ -69,6 +69,7 @@ class InputFeatures:
             float for regression problems.
     """
 
+    example_index: int
     input_ids: List[int]
     attention_mask: Optional[List[int]] = None
     token_type_ids: Optional[List[int]] = None

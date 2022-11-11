@@ -68,10 +68,12 @@ class DefaultDataCollator(DataCollator):
         else:
             batch = {}
 
+        batch["example_indices"] = [f.example_index for f in features]
+
         # Handling of all other possible attributes.
         # Again, we will use the first element to figure out which key/values are not None for this model.
         for k, v in vars(first).items():
-            if k not in ("label", "label_ids") and v is not None and not isinstance(v, str):
+            if k not in ("label", "label_ids", "example_index") and v is not None and not isinstance(v, str):
                 batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.long)
         return batch
 

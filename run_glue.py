@@ -162,6 +162,7 @@ def main():
     # training_args.aug_type = data_args.aug_type
     # Initialize our Trainer
     training_args.task_name = data_args.task_name
+    training_args.max_seq_length = data_args.max_seq_length
     training_args.model_name_or_path = model_args.model_name_or_path
     trainer = Trainer(
         model=model,
