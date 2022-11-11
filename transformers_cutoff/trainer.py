@@ -682,7 +682,7 @@ class Trainer:
         batch_size = embeds.size(0)
 
         # Iterate on each example in batch
-        batch_iterator = tqdm(range(batch_size), desc="batch", ascii=True)
+        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
         for i in batch_iterator:
             cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
 
