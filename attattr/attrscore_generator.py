@@ -39,7 +39,7 @@ class AttrScoreGenerator:
         model_name,
         task_name,
         model_file=None,
-        num_batches=4,
+        num_batches=1,
         batch_size=16,
         random_seed=1,
     ):
