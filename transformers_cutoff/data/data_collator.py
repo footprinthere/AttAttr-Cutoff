@@ -68,6 +68,8 @@ class DefaultDataCollator(DataCollator):
         else:
             batch = {}
 
+        batch["example_index"] = first.example_index
+
         # Handling of all other possible attributes.
         # Again, we will use the first element to figure out which key/values are not None for this model.
         for k, v in vars(first).items():
