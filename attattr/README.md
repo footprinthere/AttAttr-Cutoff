@@ -1,5 +1,9 @@
 # package `attattr`
 
+## Problems
+* `transformers_cutoff`와 이 패키지가 서로를 import 하는 문제
+    - 문제 없이 실행은 되나 좋은 구현은 아니라고 판단됨
+
 ## Usage
 ```python
 # import
