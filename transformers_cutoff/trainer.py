@@ -170,7 +170,6 @@ class Trainer:
 
     batched_attr: bool = False
     attr_generator: Optional[AttrScoreGenerator] = None
-    # saved_cutoff_embeds: Dict[int, tuple] = {}
     saved_cutoff_idx = None
 
     def __init__(
@@ -518,7 +517,7 @@ class Trainer:
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = tqdm(train_dataloader, desc=f"Epoch-{epoch}", disable=not self.is_local_master())
-            self._initialize_cutoff_index_array(len(train_dataloader.dataset))
+            self._initialize_cutoff_index_array(len(train_dataloader.dataset))      # initialize numpy array
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -746,9 +745,6 @@ class Trainer:
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
-
-        # # Cache calculated cutoff embeds
-        # self.saved_cutoff_embeds.update({example_indices: (input_embeds, input_masks)})
 
         return input_embeds, input_masks
 
