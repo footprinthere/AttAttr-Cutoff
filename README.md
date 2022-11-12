@@ -9,17 +9,21 @@ $ conda deactivate
 
 ### Training
 ```shell
-$ ./run_glue {dataset name} {GPU number} {train batch size}
-# ./run_glue CoLA 0 16
+$ ./run_glue.sh {dataset name} {GPU number}
+# ./run_glue.sh CoLA 0
+```
+
+### Testing
+```shell
+$ ./run_glue_test.sh {dataset name} {GPU number} {checkpoint step}
+# ./run_glue_test.sh CoLA 0 100
+# if your model checkpoint file is saved under the directory "checkpoint-100"
 ```
 
 ### Cutoff types
 ```
 span_cutoff, token_cutoff, dim_cutoff
 ```
-
-## Subprojects
-**Attention Attribution + Cutoff** [AttAttr-Cutoff](https://github.com/footprinthere/AttAttr-Cutoff)
 
 ## References
 **Cutoff** [github](https://github.com/dinghanshen/Cutoff)
