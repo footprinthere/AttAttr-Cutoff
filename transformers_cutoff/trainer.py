@@ -231,8 +231,9 @@ class Trainer:
             # Set an xla_device flag on the model's config.
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
-
-        self._initialize_attr_generator(batched=self.batched_attr)
+        
+        if self.args.do_train:
+            self._initialize_attr_generator(batched=self.batched_attr)
 
     # TODO:
     def _initialize_attr_generator(self, batched=False):
@@ -243,6 +244,7 @@ class Trainer:
 
         if batched:
             generator_class = BatchedAttrScoreGenerator
+            raise NotImplementedError
         else:
             generator_class = AttrScoreGenerator
 
