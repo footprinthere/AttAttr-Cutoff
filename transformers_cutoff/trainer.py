@@ -170,7 +170,6 @@ class Trainer:
 
     batched_attr: bool = False
     attr_generator: Optional[AttrScoreGenerator] = None
-    # saved_cutoff_embeds: Dict[int, tuple] = {}
     saved_cutoff_idx = None
 
     def __init__(
@@ -231,8 +230,9 @@ class Trainer:
             # Set an xla_device flag on the model's config.
             # We'll find a more elegant and not need to do this in the future.
             self.model.config.xla_device = True
-
-        self._initialize_attr_generator(batched=self.batched_attr)
+        
+        if self.args.do_train:
+            self._initialize_attr_generator(batched=self.batched_attr)
 
     # TODO:
     def _initialize_attr_generator(self, batched=False):
@@ -243,6 +243,7 @@ class Trainer:
 
         if batched:
             generator_class = BatchedAttrScoreGenerator
+            raise NotImplementedError
         else:
             generator_class = AttrScoreGenerator
 
@@ -516,7 +517,7 @@ class Trainer:
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = tqdm(train_dataloader, desc=f"Epoch-{epoch}", disable=not self.is_local_master())
-            self._initialize_cutoff_index_array(len(train_dataloader.dataset))
+            self._initialize_cutoff_index_array(len(train_dataloader.dataset))      # initialize numpy array
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -691,7 +692,7 @@ class Trainer:
 
         # Iterate on each example in batch
         batch_size = embeds.size(0)
-        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
         for i in batch_iterator:
             example_index = example_indices[i]
             example_embed = embeds[i]
@@ -730,7 +731,7 @@ class Trainer:
             else:
                 # lowest_indices already cached
                 cutoff_indices = self.saved_cutoff_idx[example_index]
-                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]
+                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
                 lowest_indices = torch.LongTensor(cutoff_indices)
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
@@ -744,9 +745,6 @@ class Trainer:
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
-
-        # # Cache calculated cutoff embeds
-        # self.saved_cutoff_embeds.update({example_indices: (input_embeds, input_masks)})
 
         return input_embeds, input_masks
 

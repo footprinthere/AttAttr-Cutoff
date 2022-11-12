@@ -45,6 +45,9 @@ class ModelArguments:
     cache_dir: Optional[str] = field(
         default=None, metadata={"help": "Where do you want to store the pretrained models downloaded from s3"}
     )
+    saved_dir: str = field(
+        default=None,
+    )
 
 
 def main():
@@ -242,8 +245,8 @@ def main():
             orig_task_name = "CoLA"
         
         model = AutoModelForSequenceClassification.from_pretrained(
-            f"/home/jovyan/work/checkpoint/{orig_task_name}/{checkpoint_aug_type}/",
-            config = config
+            model_args.saved_dir,
+            config = config,
         )
         test_dataset = test_dataset_class(data_args, tokenizer = tokenizer)
         trainer = Trainer(
