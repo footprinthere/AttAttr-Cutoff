@@ -693,7 +693,7 @@ class Trainer:
 
         # Iterate on each example in batch
         batch_size = embeds.size(0)
-        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
         for i in batch_iterator:
             example_index = example_indices[i]
             example_embed = embeds[i]
@@ -732,7 +732,7 @@ class Trainer:
             else:
                 # lowest_indices already cached
                 cutoff_indices = self.saved_cutoff_idx[example_index]
-                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]
+                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
                 lowest_indices = torch.LongTensor(cutoff_indices)
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
