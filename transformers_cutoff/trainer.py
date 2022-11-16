@@ -700,6 +700,8 @@ class Trainer:
 
             if epoch == 0:
                 cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
+                if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
+                    cutoff_length = self.args.min_cutoff_length
 
                 # Unsqueeze to keep batch dimesion (=1)
                 example_input_ids = input_ids[i].unsqueeze(0)
@@ -722,17 +724,27 @@ class Trainer:
                 attr_layer_max = attr.max(dim=0).values     # max along layer dimension
                 cls_attr = attr_layer_max[0]
                 
-                lowest_indices = torch.topk(cls_attr, cutoff_length, 0, largest=False).indices
+                # Select least important tokens
+                extra_length = 0
+                if self.args.cutoff_except_special_tokens:
+                    extra_length = 6    # CLS, SEP, BOS*2, EOS*2
+                lowest_indices = torch.topk(cls_attr, k=cutoff_length+extra_length, dim=0, largest=False).indices
+                lowest_indices = lowest_indices.cpu().numpy()
+
+                if self.args.cutoff_except_special_tokens:
+                    special_tokens = self._get_special_token_ids()
+                    for i in len(lowest_indices):
+                        if lowest_indices[i] in special_tokens:
+                            lowest_indices = np.delete(lowest_indices, i)
+                    lowest_indices = lowest_indices[:cutoff_length]
 
                 # Caching
-                cutoff_indices = lowest_indices.cpu().numpy()
-                self.saved_cutoff_idx[example_index, :len(cutoff_indices)] = cutoff_indices
+                self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
             else:
                 # lowest_indices already cached
-                cutoff_indices = self.saved_cutoff_idx[example_index]
-                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
-                lowest_indices = torch.LongTensor(cutoff_indices)
+                lowest_indices = self.saved_cutoff_idx[example_index]
+                lowest_indices = lowest_indices[: list(lowest_indices).index(-1)]   # remove padding
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
             zero_mask[lowest_indices] = 0
@@ -763,6 +775,14 @@ class Trainer:
         # cutoff는 어차피 example마다 따로 수행해야 함
         # 정말 효율성이 개선될까?
         raise NotImplementedError
+
+    def _get_special_token_ids(self):
+        return (
+            self.train_dataset.tokenizer.cls_token_id,
+            self.train_dataset.tokenizer.sep_token_id,
+            self.train_dataset.tokenizer.bos_token_id,
+            self.train_dataset.tokenizer.eos_token_id,
+        )
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
