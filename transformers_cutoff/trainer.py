@@ -733,10 +733,11 @@ class Trainer:
 
                 if self.args.cutoff_except_special_tokens:
                     special_tokens = self._get_special_token_ids()
+                    delete_indices = []
                     for i in len(lowest_indices):
                         if lowest_indices[i] in special_tokens:
-                            lowest_indices = np.delete(lowest_indices, i)
-                    lowest_indices = lowest_indices[:cutoff_length]
+                            delete_indices.append(i)
+                    lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
 
                 # Caching
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
