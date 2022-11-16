@@ -1,7 +1,6 @@
 # Arguments
 # $1: task name
 # $2: number of GPU to use
-# $3: batch size 
 
 export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
@@ -22,6 +21,8 @@ python run_glue.py \
   --do_aug \
   --aug_type ${CUTOFF_TYPE}_cutoff \
   --aug_cutoff_ratio 0.1 \
+  --min_cutoff_length 1 \
+  --cutoff_except_special_tokens \
   --aug_ce_loss 1.0 \
   --aug_js_loss 1.0 \
   --learning_rate 5e-6 \
@@ -29,5 +30,5 @@ python run_glue.py \
   --logging_steps 500 \
   --save_steps 500 \
   --per_gpu_train_batch_size $BATCH_SIZE \
-  --output_dir results/$TASK_NAME-${CUTOFF_TYPE}-cutoff-attr-cache \
+  --output_dir results/$TASK_NAME-${CUTOFF_TYPE}-cutoff-attr-cache+ \
   --overwrite_output_dir
