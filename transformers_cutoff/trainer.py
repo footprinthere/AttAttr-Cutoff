@@ -728,15 +728,18 @@ class Trainer:
                 extra_length = 0
                 if self.args.cutoff_except_special_tokens:
                     extra_length = 6    # CLS, SEP, BOS*2, EOS*2
+                    if cutoff_length + extra_length > input_lens[i]:
+                        extra_length = input_lens[i] - cutoff_length
+
                 lowest_indices = torch.topk(cls_attr, k=cutoff_length+extra_length, dim=0, largest=False).indices
                 lowest_indices = lowest_indices.cpu().numpy()
 
                 if self.args.cutoff_except_special_tokens:
                     special_tokens = self._get_special_token_ids()
                     delete_indices = []
-                    for i in len(lowest_indices):
-                        if lowest_indices[i] in special_tokens:
-                            delete_indices.append(i)
+                    for idx in range(len(lowest_indices)):
+                        if lowest_indices[idx] in special_tokens:
+                            delete_indices.append(idx)
                     lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
 
                 # Caching
