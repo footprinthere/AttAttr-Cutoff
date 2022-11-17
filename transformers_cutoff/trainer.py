@@ -171,6 +171,7 @@ class Trainer:
     batched_attr: bool = False
     attr_generator: Optional[AttrScoreGenerator] = None
     saved_cutoff_idx = None
+    special_token_ids: Tuple = None
 
     def __init__(
         self,
@@ -233,6 +234,7 @@ class Trainer:
         
         if self.args.do_train:
             self._initialize_attr_generator(batched=self.batched_attr)
+            self._initialize_special_tokens_list
 
     # TODO:
     def _initialize_attr_generator(self, batched=False):
@@ -257,6 +259,15 @@ class Trainer:
         max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
         self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
         self.saved_cutoff_idx.fill(-1)
+
+    def _initialize_special_tokens_list(self):
+        t = self.train_dataset.tokenizer
+        self.special_token_ids = (
+            t.cls_token_id,
+            t.sep_token_id,
+            t.bos_token_id,
+            t.eos_token,id,
+        )
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -735,10 +746,9 @@ class Trainer:
                 lowest_indices = lowest_indices.cpu().numpy()
 
                 if self.args.cutoff_except_special_tokens:
-                    special_tokens = self._get_special_token_ids()
                     delete_indices = []
                     for idx in range(len(lowest_indices)):
-                        if lowest_indices[idx] in special_tokens:
+                        if lowest_indices[idx] in self.special_token_ids:
                             delete_indices.append(idx)
                     lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
 
@@ -779,14 +789,6 @@ class Trainer:
         # cutoff는 어차피 example마다 따로 수행해야 함
         # 정말 효율성이 개선될까?
         raise NotImplementedError
-
-    def _get_special_token_ids(self):
-        return (
-            self.train_dataset.tokenizer.cls_token_id,
-            self.train_dataset.tokenizer.sep_token_id,
-            self.train_dataset.tokenizer.bos_token_id,
-            self.train_dataset.tokenizer.eos_token_id,
-        )
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
