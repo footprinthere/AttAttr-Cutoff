@@ -234,7 +234,7 @@ class Trainer:
         
         if self.args.do_train:
             self._initialize_attr_generator(batched=self.batched_attr)
-            self._initialize_special_tokens_list
+            self._initialize_special_token_ids()
 
     # TODO:
     def _initialize_attr_generator(self, batched=False):
@@ -260,7 +260,7 @@ class Trainer:
         self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
         self.saved_cutoff_idx.fill(-1)
 
-    def _initialize_special_tokens_list(self):
+    def _initialize_special_token_ids(self):
         t = self.train_dataset.tokenizer
         self.special_token_ids = (
             t.cls_token_id,
