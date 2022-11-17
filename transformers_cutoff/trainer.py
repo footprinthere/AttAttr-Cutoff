@@ -701,6 +701,9 @@ class Trainer:
         input_embeds = []
         input_masks = []
 
+        too_short_count = 0
+        excepted_special_token_count = 0
+
         # Iterate on each example in batch
         batch_size = embeds.size(0)
         batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
@@ -712,8 +715,8 @@ class Trainer:
             if epoch == 0:
                 cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
                 if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
-                    logger.info(f"*** Example {example_index}: Forced to cutoff since the sentence is too short")
                     cutoff_length = self.args.min_cutoff_length
+                    too_short_count += 1
 
                 # Unsqueeze to keep batch dimesion (=1)
                 example_input_ids = input_ids[i].unsqueeze(0)
@@ -747,17 +750,17 @@ class Trainer:
                 lowest_indices = lowest_indices.cpu().numpy()
 
                 if self.args.cutoff_except_special_tokens:
-                    delete_indices = []
+                    except_indices = []
 
                     for idx in range(len(lowest_indices)):
                         if lowest_indices[idx] in self.special_token_ids:
-                            delete_indices.append(idx)
-                    if delete_indices:
-                        lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
-                        logger.info(f"*** Example {example_index}: There were {len(delete_indices)} special tokens excepted")
+                            except_indices.append(idx)
+                    if except_indices:
+                        lowest_indices = np.delete(lowest_indices, except_indices)[:cutoff_length]
+                        excepted_special_token_count += len(except_indices)
 
-                    if len(delete_indices) < len(self.special_token_ids):
-                        compensate = len(self.special_token_ids) - len(delete_indices)
+                    if len(except_indices) < len(self.special_token_ids):
+                        compensate = len(self.special_token_ids) - len(except_indices)
                         lowest_indices = lowest_indices[:-compensate]
 
                 # Caching
@@ -776,6 +779,8 @@ class Trainer:
 
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
+
+        logger.info(f"Too short sentences: {too_short_count} / Excepted special tokens: {excepted_special_token_count}")
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
