@@ -756,6 +756,10 @@ class Trainer:
                         lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
                         logger.info(f"*** Example {example_index}: There were {len(delete_indices)} special tokens excepted")
 
+                    if len(delete_indices) < len(self.special_token_ids):
+                        compensate = len(self.special_token_ids) - len(delete_indices)
+                        lowest_indices = lowest_indices[:-compensate]
+
                 # Caching
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
