@@ -712,6 +712,7 @@ class Trainer:
             if epoch == 0:
                 cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
                 if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
+                    logger.info(f"*** Example {example_index}: Forced to cutoff since the sentence is too short")
                     cutoff_length = self.args.min_cutoff_length
 
                 # Unsqueeze to keep batch dimesion (=1)
@@ -747,10 +748,13 @@ class Trainer:
 
                 if self.args.cutoff_except_special_tokens:
                     delete_indices = []
+
                     for idx in range(len(lowest_indices)):
                         if lowest_indices[idx] in self.special_token_ids:
                             delete_indices.append(idx)
-                    lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
+                    if delete_indices:
+                        lowest_indices = np.delete(lowest_indices, delete_indices)[:cutoff_length]
+                        logger.info(f"*** Example {example_index}: There were {len(delete_indices)} special tokens excepted")
 
                 # Caching
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
