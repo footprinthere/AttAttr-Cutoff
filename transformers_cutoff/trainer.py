@@ -763,6 +763,11 @@ class Trainer:
                         compensate = len(self.special_token_ids) - len(except_indices)
                         lowest_indices = lowest_indices[:-compensate]
 
+                    # FIXME: topk에 special token이 많이 포함되어 있어서 배제했는데, 배제된 수를 채울 만큼의
+                    #       다른 token이 충분하지 않을 경우 설정된 cutoff ratio만큼의 token이 실제로 cutoff
+                    #       되지 않는 문제가 생길 수 있음 (특히 짧은 문장의 경우)
+                    #       다만 이런 문제는 발생 빈도가 그다지 크지 않을 것으로 추측
+
                 # Caching
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
