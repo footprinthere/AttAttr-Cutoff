@@ -234,7 +234,8 @@ class Trainer:
         
         if self.args.do_train:
             self._initialize_attr_generator(batched=self.batched_attr)
-            self._initialize_special_token_ids()
+            if self.args.cutoff_except_special_tokens:
+                self._initialize_special_token_ids()
 
     # TODO:
     def _initialize_attr_generator(self, batched=False):
@@ -266,8 +267,10 @@ class Trainer:
             t.cls_token_id,
             t.sep_token_id,
             t.bos_token_id,
-            t.eos_token,id,
+            t.eos_token_id,
+            t.convert_tokens_to_id('.'),
         )
+        self.MAX_SPECIAL_TOKENS = 7
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -742,7 +745,7 @@ class Trainer:
                 # Select least important tokens
                 extra_length = 0
                 if self.args.cutoff_except_special_tokens:
-                    extra_length = 6    # CLS, SEP, BOS*2, EOS*2
+                    extra_length = self.MAX_SPECIAL_TOKENS
                     if cutoff_length + extra_length > input_lens[i]:
                         extra_length = input_lens[i] - cutoff_length
 
