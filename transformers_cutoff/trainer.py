@@ -785,7 +785,8 @@ class Trainer:
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
 
-        logger.info(f"Too short sentences: {too_short_count} / Excepted special tokens: {excepted_special_token_count}")
+        if self.args.log_attattr_plus and epoch == 1:
+            logger.info(f"Too short sentences: {too_short_count} / Excepted special tokens: {excepted_special_token_count}")
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
