@@ -727,7 +727,7 @@ class Trainer:
                 example_token_type_ids = token_type_ids[i].unsqueeze(0) if token_type_ids is not None else None
                 example_labels = labels[i].unsqueeze(0)
 
-                # Generate attribution score
+                # Generate attribution scores
                 model_inputs = ModelInput(
                     input_ids=example_input_ids,
                     token_type_ids=example_token_type_ids,
@@ -736,11 +736,26 @@ class Trainer:
                 )
                 attr = self.attr_generator.generate_attrscore(model_inputs)
 
-                example_mask = example_mask.squeeze(0)
-
-                attr = torch.stack(attr).mean(dim=1)        # mean along head dimension
-                attr_layer_max = attr.max(dim=0).values     # max along layer dimension
-                cls_attr = attr_layer_max[0]
+                # Compress attribution scores
+                attr = torch.stack(attr).mean(dim=1)            # mean along head dimension
+                
+                if self.args.attr_layer_strategy == "max":
+                    attr = attr.max(dim=0).values               # max along layer dimension
+                
+                elif self.args.attr_layer_strategy == "mean":
+                    if self.args.attr_mean_of_last_layers is None:
+                        n_layers = attr.size(0)
+                    elif self.args.attr_mean_of_last_layers > attr.size(0):
+                        raise ValueError("The value of the rgument 'attr_mean_of_last_layers' exceeds boundary")
+                    else:
+                        n_layers = self.args.attr_mean_of_last_layers
+                    attr = attr[-n_layers:]                     # Select last n layers
+                    attr = attr.mean(dim=0)                     # mean along layer dimension
+                
+                elif self.args.attr_layer_strategy == "normalize":
+                    raise NotImplementedError   # FIXME:
+                    
+                cls_attr = attr[0]          # extract column for [CLS]
                 
                 # Select least important tokens
                 extra_length = 0
@@ -766,11 +781,6 @@ class Trainer:
                         compensate = len(self.special_token_ids) - len(except_indices)
                         lowest_indices = lowest_indices[:-compensate]
 
-                    # FIXME: topk에 special token이 많이 포함되어 있어서 배제했는데, 배제된 수를 채울 만큼의
-                    #       다른 token이 충분하지 않을 경우 설정된 cutoff ratio만큼의 token이 실제로 cutoff
-                    #       되지 않는 문제가 생길 수 있음 (특히 짧은 문장의 경우)
-                    #       다만 이런 문제는 발생 빈도가 그다지 크지 않을 것으로 추측
-
                 # Caching
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
@@ -782,6 +792,7 @@ class Trainer:
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
             zero_mask[lowest_indices] = 0
 
+            example_mask = example_mask.squeeze(0)
             cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
             cutoff_mask = torch.mul(zero_mask, example_mask).type(torch.int64)
 

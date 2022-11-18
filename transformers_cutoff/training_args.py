@@ -88,6 +88,8 @@ class TrainingArguments:
     min_cutoff_length: Optional[int] = field(default=None)
     cutoff_except_special_tokens: bool = field(default=False)
     log_attattr_plus: bool = field(default=False)
+    attr_layer_strategy: str = field(default="max")                     # one of ["max", "mean", "normalize"]
+    attr_mean_of_last_layers: Optional[int] = field(default=None)       # valid only when attr_layer_strategy == "mean"
 
     logging_dir: Optional[str] = field(default=None, metadata={"help": "Tensorboard log dir."})
     logging_first_step: bool = field(default=False, metadata={"help": "Log and eval the first global_step"})
