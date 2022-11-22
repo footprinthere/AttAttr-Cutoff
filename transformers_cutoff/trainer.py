@@ -737,7 +737,7 @@ class Trainer:
                 )
                 attr = self.attr_generator.generate_attrscore(model_inputs)
 
-                # Compress attribution scores
+                # Compress attribution scores according to the selected strategy
                 attr = torch.stack(attr).mean(dim=1)            # mean along head dimension
                 
                 if self.args.attr_layer_strategy == "max":
@@ -755,6 +755,9 @@ class Trainer:
                 
                 elif self.args.attr_layer_strategy == "normalize":
                     raise NotImplementedError   # FIXME:
+
+                else:
+                    raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {self.args.attr_layer_strategy}")
                     
                 cls_attr = attr[0]          # extract column for [CLS]
                 
