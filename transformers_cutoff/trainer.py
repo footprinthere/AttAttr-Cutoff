@@ -786,6 +786,9 @@ class Trainer:
                         lowest_indices = lowest_indices[:-compensate]
 
                 # Caching
+                if len(lowest_indices) > self.saved_cutoff_idx.shape[1]:
+                    # Truncate when too much tokens are selected
+                    lowest_indices = lowest_indices[:self.saved_cutoff_idx.shape[1]]
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
             else:
