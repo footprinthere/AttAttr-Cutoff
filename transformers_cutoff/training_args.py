@@ -89,6 +89,8 @@ class TrainingArguments:
     cutoff_except_special_tokens: bool = field(default=False)
     log_attattr_plus: bool = field(default=False)
 
+    resume_from_checkpoint: Optional[str] = field(default=False)
+
     logging_dir: Optional[str] = field(default=None, metadata={"help": "Tensorboard log dir."})
     logging_first_step: bool = field(default=False, metadata={"help": "Log and eval the first global_step"})
     logging_steps: int = field(default=5000, metadata={"help": "Log every X updates steps."})
