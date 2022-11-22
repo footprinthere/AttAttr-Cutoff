@@ -15,6 +15,7 @@ export PYTHONPAHT=`pwd`
 CUDA_VISIBLE_DEVICES=$NUM_GPU \
 python run_glue.py \
   --model_name_or_path roberta-base \
+  --resume_from_checkpoint results/MNLI-token-cutoff-attr-cache/checkpoint-78000 \
   --data_dir $GLUE_DIR/$TASK_NAME \
   --task_name $TASK_NAME \
   --do_train \
