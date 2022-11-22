@@ -1,11 +1,10 @@
 # Arguments
 # $1: task name
 # $2: GPU number
-# $3: attattr version suffix
 
 export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
-export SUFFIX=$3
+export SUFFIX="++"
 export BATCH_SIZE=16
 
 export PYTHONPAHT=`pwd`
@@ -22,6 +21,8 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --aug_cutoff_ratio 0.1 \
   --min_cutoff_length 1 \
   --cutoff_except_special_tokens \
+  --attr_layer_strategy mean \
+  --attr_mean_of_last_layers 2 \
   --aug_ce_loss 1.0 \
   --aug_js_loss 1.0 \
   --learning_rate 5e-6 \
