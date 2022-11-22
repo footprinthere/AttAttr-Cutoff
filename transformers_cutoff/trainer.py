@@ -31,6 +31,7 @@ from .training_args import TrainingArguments, is_tpu_available
 from utils import report_results
 
 from .modeling_roberta import RobertaForMaskedLM, RobertaForSequenceClassification
+from .tokenization_roberta import RobertaTokenizer
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from attattr import AttrScoreGenerator, BatchedAttrScoreGenerator, ModelInput
@@ -262,13 +263,13 @@ class Trainer:
         self.saved_cutoff_idx.fill(-1)
 
     def _initialize_special_token_ids(self):
-        t = self.train_dataset.tokenizer
+        t: RobertaTokenizer = self.train_dataset.tokenizer
         self.special_token_ids = (
             t.cls_token_id,
             t.sep_token_id,
             t.bos_token_id,
             t.eos_token_id,
-            t.convert_tokens_to_id('.'),
+            t.convert_tokens_to_ids('.'),
         )
         self.MAX_SPECIAL_TOKENS = 7
 
