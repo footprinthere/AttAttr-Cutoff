@@ -27,6 +27,7 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --num_train_epochs 10.0 \
   --logging_steps 500 \
   --save_steps 500 \
+  --save_total_limits 5 \
   --per_gpu_train_batch_size $BATCH_SIZE \
   --output_dir results/${TASK_NAME}-cutoff-attattr${SUFFIX} \
   --overwrite_output_dir
