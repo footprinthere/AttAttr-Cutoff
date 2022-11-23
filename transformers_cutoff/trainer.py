@@ -747,14 +747,16 @@ class Trainer:
                     if self.args.attr_mean_of_last_layers is None:
                         n_layers = attr.size(0)
                     elif self.args.attr_mean_of_last_layers > attr.size(0):
-                        raise ValueError("The value of the rgument 'attr_mean_of_last_layers' exceeds boundary")
+                        raise ValueError("The value of the argument 'attr_mean_of_last_layers' exceeds boundary")
                     else:
                         n_layers = self.args.attr_mean_of_last_layers
                     attr = attr[-n_layers:]                     # Select last n layers
                     attr = attr.mean(dim=0)                     # mean along layer dimension
                 
                 elif self.args.attr_layer_strategy == "normalize":
-                    raise NotImplementedError   # FIXME:
+                    attr = torch.sub(attr, attr.mean(dim=0))
+                    attr = torch.div(attr, attr.var(dim=0))
+                    attr = attr.max(dim=0).values               # max along layer dimension
 
                 else:
                     raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {self.args.attr_layer_strategy}")
