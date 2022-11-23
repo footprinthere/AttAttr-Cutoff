@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --aug_cutoff_ratio 0.1 \
   --min_cutoff_length 1 \
   --cutoff_except_special_tokens \
-  --attr_layer_strategy norm \
+  --attr_layer_strategy normalize \
   --aug_ce_loss 1.0 \
   --aug_js_loss 1.0 \
   --learning_rate 5e-6 \
