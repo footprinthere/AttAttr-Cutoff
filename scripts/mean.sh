@@ -1,11 +1,18 @@
 # Arguments
 # $1: task name
 # $2: GPU number
+# $3: suffix (_ or +)
 
 export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
-export SUFFIX="+mean"
+export SUFFIX="$3mean"
 export BATCH_SIZE=16
+
+if [ "$3" = "+" ]; then
+  export PLUS_OPTION="--cutoff_except_special_tokens"
+else
+  export PLUS_OPTION=""
+fi
 
 export PYTHONPAHT=`pwd`
 
@@ -20,7 +27,7 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --aug_type token_cutoff \
   --aug_cutoff_ratio 0.1 \
   --min_cutoff_length 1 \
-  --cutoff_except_special_tokens \
+  ${PLUS_OPTION} \
   --attr_layer_strategy mean \
   --attr_mean_of_last_layers 2 \
   --aug_ce_loss 1.0 \
