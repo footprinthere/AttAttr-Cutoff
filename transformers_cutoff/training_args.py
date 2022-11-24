@@ -88,7 +88,7 @@ class TrainingArguments:
     #################################################################################################
     min_cutoff_length: Optional[int] = field(default=None)
     cutoff_except_special_tokens: bool = field(default=False)
-    log_attattr_plus: bool = field(default=False)
+    log_special_token_count: bool = field(default=False)
     attr_layer_strategy: str = field(default="max")                     # one of ["max", "mean", "normalize"]
     attr_mean_of_last_layers: Optional[int] = field(default=None)       # valid only when attr_layer_strategy == "mean"
 

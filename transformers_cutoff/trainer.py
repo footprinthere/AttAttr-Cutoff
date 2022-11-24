@@ -271,7 +271,6 @@ class Trainer:
             t.eos_token_id,
             t.convert_tokens_to_ids('.'),
         )
-        self.MAX_SPECIAL_TOKENS = 7
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -704,9 +703,7 @@ class Trainer:
 
         input_embeds = []
         input_masks = []
-
-        too_short_count = 0
-        excepted_special_token_count = 0
+        special_token_count = 0
 
         # Iterate on each example in batch
         batch_size = batch_embeds.size(0)
@@ -719,8 +716,12 @@ class Trainer:
             if epoch == 0:
                 cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
                 if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
+                    # Force lower bound of cutoff_length
                     cutoff_length = self.args.min_cutoff_length
-                    too_short_count += 1
+                assert cutoff_length <= self.saved_cutoff_idx.shape[1], (
+                    "Problem while calculating the size of cache matrix: "
+                    f"{cutoff_length} > {self.saved_cutoff_idx.shape[1]}"
+                )
 
                 # Unsqueeze to keep batch dimension (=1)
                 example_input_ids = input_ids[i].unsqueeze(0)
@@ -762,48 +763,37 @@ class Trainer:
                     raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {self.args.attr_layer_strategy}")
                     
                 cls_attr = attr[0]          # extract column for [CLS]
+
+                # Sort tokens by attribution
+                sorted_indices = torch.sort(cls_attr, dim=0, descending=True).indices
+                sorted_indices = sorted_indices.cpu().numpy()
+
+                if self.args.cutoff_except_special_tokens:
+                    cutoff_indices = []
+
+                    for idx in sorted_indices:
+                        # special token이 아닌 것만 선택
+                        if example_input_ids[0][idx] not in self.special_token_ids:
+                            cutoff_indices.append(idx)
+                            if len(cutoff_indices) >= cutoff_length:
+                                break
+                        else:
+                            special_token_count += 1
+                    cutoff_indices = np.array(cutoff_indices)[:cutoff_length]
                 
-                # Select least important tokens
-                extra_length = 0
-                if self.args.cutoff_except_special_tokens:
-                    extra_length = self.MAX_SPECIAL_TOKENS              # special token을 배제할 것을 대비해 여분 확보
-                    if cutoff_length + extra_length > input_lens[i]:    # input length를 넘을 수는 없음
-                        extra_length = input_lens[i] - cutoff_length
-
-                lowest_indices = torch.topk(cls_attr, k=cutoff_length+extra_length, dim=0, largest=False).indices
-                lowest_indices = lowest_indices.cpu().numpy()
-
-                if self.args.cutoff_except_special_tokens:
-                    except_indices = []
-
-                    for idx in lowest_indices:
-                        if example_input_ids[idx] in self.special_token_ids:    # special token 식별
-                            except_indices.append(idx)
-                    if except_indices:
-                        lowest_indices = np.delete(lowest_indices, except_indices)[:cutoff_length]
-                        # except_indices에 해당하는 위치의 token 제거 (slicing은 length를 넘겨도 에러 없이 작동함)
-                        excepted_special_token_count += len(except_indices)
-                    else:
-                        lowest_indices = lowest_indices[:cutoff_length]
-
-                    # if len(except_indices) < extra_length:
-                    #     compensate = extra_length - len(except_indices)
-                    #     lowest_indices = lowest_indices[:-compensate]
+                else:
+                    cutoff_indices = sorted_indices[:cutoff_length]
 
                 # Caching
-                assert len(lowest_indices) < self.saved_cutoff_idx.shape[1], "Something went wrong: Exceeded length bound of cache array"
-                # if len(lowest_indices) > self.saved_cutoff_idx.shape[1]:
-                #     # Truncate when too much tokens are selected
-                #     lowest_indices = lowest_indices[:self.saved_cutoff_idx.shape[1]]
-                self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
+                self.saved_cutoff_idx[example_index, :len(cutoff_indices)] = cutoff_indices
 
             else:
-                # lowest_indices already cached
-                lowest_indices = self.saved_cutoff_idx[example_index]
-                lowest_indices = lowest_indices[: list(lowest_indices).index(-1)]   # remove padding
+                # cutoff_indices already cached
+                cutoff_indices = self.saved_cutoff_idx[example_index]
+                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
-            zero_mask[lowest_indices] = 0
+            zero_mask[cutoff_indices] = 0
 
             example_mask = example_mask.squeeze(0)
             cutoff_embed = torch.mul(zero_mask[:, None], example_embed)
@@ -812,8 +802,8 @@ class Trainer:
             input_embeds.append(cutoff_embed)
             input_masks.append(cutoff_mask)
 
-        if self.args.log_attattr_plus and epoch == 1:
-            logger.info(f"Too short sentences: {too_short_count} / Excepted special tokens: {excepted_special_token_count}")
+        if epoch == 0 and self.args.log_special_token_count:
+            tqdm.write(f"Excepted special tokens in a batch: {special_token_count}")
 
         input_embeds = torch.stack(input_embeds, dim=0)
         input_masks = torch.stack(input_masks, dim=0)
