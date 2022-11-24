@@ -693,7 +693,7 @@ class Trainer:
     def generate_token_cutoff_embedding(
         self,
         example_indices: List[int],
-        embeds, 
+        batch_embeds, 
         input_ids,
         token_type_ids,
         attention_mask,
@@ -709,11 +709,11 @@ class Trainer:
         excepted_special_token_count = 0
 
         # Iterate on each example in batch
-        batch_size = embeds.size(0)
+        batch_size = batch_embeds.size(0)
         batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
         for i in batch_iterator:
             example_index = example_indices[i]
-            example_embed = embeds[i]
+            example_embed = batch_embeds[i]
             example_mask = attention_mask[i]
 
             if epoch == 0:
@@ -722,7 +722,7 @@ class Trainer:
                     cutoff_length = self.args.min_cutoff_length
                     too_short_count += 1
 
-                # Unsqueeze to keep batch dimesion (=1)
+                # Unsqueeze to keep batch dimension (=1)
                 example_input_ids = input_ids[i].unsqueeze(0)
                 example_mask = example_mask.unsqueeze(0)
                 example_token_type_ids = token_type_ids[i].unsqueeze(0) if token_type_ids is not None else None
@@ -766,8 +766,8 @@ class Trainer:
                 # Select least important tokens
                 extra_length = 0
                 if self.args.cutoff_except_special_tokens:
-                    extra_length = self.MAX_SPECIAL_TOKENS
-                    if cutoff_length + extra_length > input_lens[i]:
+                    extra_length = self.MAX_SPECIAL_TOKENS              # special token을 배제할 것을 대비해 여분 확보
+                    if cutoff_length + extra_length > input_lens[i]:    # input length를 넘을 수는 없음
                         extra_length = input_lens[i] - cutoff_length
 
                 lowest_indices = torch.topk(cls_attr, k=cutoff_length+extra_length, dim=0, largest=False).indices
@@ -776,21 +776,25 @@ class Trainer:
                 if self.args.cutoff_except_special_tokens:
                     except_indices = []
 
-                    for idx in range(len(lowest_indices)):
-                        if lowest_indices[idx] in self.special_token_ids:
+                    for idx in lowest_indices:
+                        if example_input_ids[idx] in self.special_token_ids:    # special token 식별
                             except_indices.append(idx)
                     if except_indices:
                         lowest_indices = np.delete(lowest_indices, except_indices)[:cutoff_length]
+                        # except_indices에 해당하는 위치의 token 제거 (slicing은 length를 넘겨도 에러 없이 작동함)
                         excepted_special_token_count += len(except_indices)
+                    else:
+                        lowest_indices = lowest_indices[:cutoff_length]
 
-                    if len(except_indices) < len(self.special_token_ids):
-                        compensate = len(self.special_token_ids) - len(except_indices)
-                        lowest_indices = lowest_indices[:-compensate]
+                    # if len(except_indices) < extra_length:
+                    #     compensate = extra_length - len(except_indices)
+                    #     lowest_indices = lowest_indices[:-compensate]
 
                 # Caching
-                if len(lowest_indices) > self.saved_cutoff_idx.shape[1]:
-                    # Truncate when too much tokens are selected
-                    lowest_indices = lowest_indices[:self.saved_cutoff_idx.shape[1]]
+                assert len(lowest_indices) < self.saved_cutoff_idx.shape[1], "Something went wrong: Exceeded length bound of cache array"
+                # if len(lowest_indices) > self.saved_cutoff_idx.shape[1]:
+                #     # Truncate when too much tokens are selected
+                #     lowest_indices = lowest_indices[:self.saved_cutoff_idx.shape[1]]
                 self.saved_cutoff_idx[example_index, :len(lowest_indices)] = lowest_indices
 
             else:
@@ -815,22 +819,6 @@ class Trainer:
         input_masks = torch.stack(input_masks, dim=0)
 
         return input_embeds, input_masks
-
-    def generate_token_cutoff_embedding_batched(
-        self,
-        example_indices,
-        embeds, 
-        input_ids,
-        token_type_ids,
-        attention_mask,
-        input_lens,
-        labels,
-    ):
-        # TODO:
-        # 현재 ModelInput에서 input_len을 계산하는 부분 수정 필요 (example마다 각각 계산)
-        # cutoff는 어차피 example마다 따로 수행해야 함
-        # 정말 효율성이 개선될까?
-        raise NotImplementedError
 
     def generate_dim_cutoff_embedding(self, embeds, masks, input_lens):
         input_embeds = []
@@ -976,7 +964,7 @@ class Trainer:
 
         input_embeds, input_masks = self.generate_token_cutoff_embedding(
             example_indices=example_indices,
-            embeds=embeds,
+            batch_embeds=embeds,
             input_ids=input_ids, 
             token_type_ids=token_type_ids,
             attention_mask=masks, 
