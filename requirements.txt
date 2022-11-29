@@ -1,6 +1,1 @@
-transformers
-torch
-torchvision
-torchaudio
-sklearn
-
+scikit-learn
