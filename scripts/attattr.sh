@@ -1,10 +1,12 @@
+# special token 배제 옵션과 min cutoff length 옵션 모두 제거
+
 # Arguments
 # $1: task name
 # $2: GPU number
 
 export GLUE_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
-export SUFFIX="+"
+export SUFFIX=""
 export BATCH_SIZE=16
 
 export PYTHONPAHT=`pwd`
@@ -19,8 +21,6 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --do_aug \
   --aug_type token_cutoff \
   --aug_cutoff_ratio 0.1 \
-  --min_cutoff_length 1 \
-  --cutoff_except_special_tokens \
   --aug_ce_loss 1.0 \
   --aug_js_loss 1.0 \
   --learning_rate 5e-6 \
