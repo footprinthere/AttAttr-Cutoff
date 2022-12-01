@@ -250,6 +250,7 @@ def main():
         if orig_task_name == "COLA":
             orig_task_name = "CoLA"
         
+        logger.info(f"Loading saved model from {model_args.saved_dir}")
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.saved_dir,
             config = config,

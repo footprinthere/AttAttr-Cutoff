@@ -12,7 +12,7 @@ export BATCH_SIZE=16
 
 CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --model_name_or_path roberta-base \
-  --saved_dir new_results/${TASK_NAME}-cutoff-attattr${SUFFIX}/checkpoint-${CKPT_STEP} \
+  --saved_dir results/${TASK_NAME}-cutoff-attattr${SUFFIX}/checkpoint-${CKPT_STEP} \
   --data_dir $GLUE_DIR/$TASK_NAME \
   --task_name $TASK_NAME \
   --do_predict \
