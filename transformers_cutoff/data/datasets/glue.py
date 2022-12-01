@@ -74,6 +74,7 @@ class GlueDataset(Dataset):
         evaluate=False,
     ):
         self.args = args
+        self.tokenizer = tokenizer
         processor = glue_processors[args.task_name]()
         self.output_mode = glue_output_modes[args.task_name]
         # Load data features from cache or dataset file

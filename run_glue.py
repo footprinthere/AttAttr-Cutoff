@@ -177,9 +177,15 @@ def main():
 
     # Training
     if training_args.do_train:
-        trainer.train(
-            model_path=model_args.model_name_or_path if os.path.isdir(model_args.model_name_or_path) else None,
-        )
+        # Select model directory
+        if training_args.resume_from_checkpoint is not None:
+            model_path = training_args.resume_from_checkpoint
+        elif os.path.isdir(model_args.model_name_or_path):
+            model_path = model_args.model_name_or_path
+        else:
+            model_path = None
+
+        trainer.train(model_path=model_path)
         # if not training_args.evaluate_during_training:
             # trainer.save_model()
             # For convenience, we also re-save the tokenizer to the same directory,
@@ -244,6 +250,7 @@ def main():
         if orig_task_name == "COLA":
             orig_task_name = "CoLA"
         
+        logger.info(f"Loading saved model from {model_args.saved_dir}")
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.saved_dir,
             config = config,

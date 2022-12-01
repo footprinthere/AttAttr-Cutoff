@@ -51,8 +51,6 @@ class TrainingArguments:
         },
     )
 
-    # task_name: str = field(default = None, metadata={"help": "task name."})
-
     do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
     do_eval_all: bool = field(default=False, metadata={'help': 'Whether to run eval on all checkpoints under output_dir'})
@@ -86,6 +84,16 @@ class TrainingArguments:
     aug_ce_loss: float = field(default=0.)
     aug_js_loss: float = field(default=0.)
     aug_cutoff_ratio: float = field(default=0.1)
+
+    #################################################################################################
+    min_cutoff_length: Optional[int] = field(default=None)
+    cutoff_except_special_tokens: bool = field(default=False)
+    log_special_token_count: bool = field(default=False)
+    attr_layer_strategy: str = field(default="max")                     # one of ["max", "mean", "normalize"]
+    attr_mean_of_last_layers: Optional[int] = field(default=None)       # valid only when attr_layer_strategy == "mean"
+
+    resume_from_checkpoint: Optional[str] = field(default=None)
+    #################################################################################################
 
     logging_dir: Optional[str] = field(default=None, metadata={"help": "Tensorboard log dir."})
     logging_first_step: bool = field(default=False, metadata={"help": "Log and eval the first global_step"})
