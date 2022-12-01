@@ -261,6 +261,7 @@ class Trainer:
         max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
         self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
         self.saved_cutoff_idx.fill(-1)
+        logger.info("Initialized numpy array for index caching")
 
     def _initialize_special_token_ids(self):
         t: RobertaTokenizer = self.train_dataset.tokenizer
@@ -790,9 +791,9 @@ class Trainer:
 
             else:
                 # cutoff_indices already cached
-                logger.info("Using cutoff indices cached in np array")
                 cutoff_indices = self.saved_cutoff_idx[example_index]
-                cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
+                if -1 in cutoff_indices:
+                    cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
             zero_mask[cutoff_indices] = 0
