@@ -525,13 +525,14 @@ class Trainer:
             epochs_trained, int(num_train_epochs), desc="Epoch", disable=not self.is_local_master()
         )
 
+        self._initialize_cutoff_index_array(len(train_dataloader.dataset))      # initialize numpy array
+
         self.eval_history = []
         for epoch in train_iterator:
             if isinstance(train_dataloader, DataLoader) and isinstance(train_dataloader.sampler, DistributedSampler):
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = tqdm(train_dataloader, desc=f"Epoch-{epoch}", disable=not self.is_local_master())
-            self._initialize_cutoff_index_array(len(train_dataloader.dataset))      # initialize numpy array
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training

@@ -2,6 +2,7 @@
 glue_data/
 results/
 new_results/
+old_results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
