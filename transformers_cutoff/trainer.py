@@ -790,6 +790,7 @@ class Trainer:
 
             else:
                 # cutoff_indices already cached
+                logger.info("Using cutoff indices cached in np array")
                 cutoff_indices = self.saved_cutoff_idx[example_index]
                 cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
 
