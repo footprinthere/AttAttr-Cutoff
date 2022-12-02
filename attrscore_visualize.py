@@ -26,6 +26,10 @@ print(__name__)
 
 def main():
     print("main")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+    
+
     tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name_or_path', type=str, default='roberta-base')
@@ -64,7 +68,8 @@ def main():
     while True:
         try:
             inputs = next(itr)
-            generate_visualization(inputs,generator,args)
+            #print(inputs)
+            generate_visualization(inputs, generator, args, device,tokenizer)
         except StopIteration:
             break
     inputs = itr.next()
@@ -75,12 +80,15 @@ def generate_visualization(
     inputs,
     generator: AttrScoreGenerator,
     args,
+    device,
+    tokenizer,
 ):
+    input_ids=inputs['input_ids'].to(device)
     model_input = ModelInput(
-        input_ids=inputs['input_ids'],
+        input_ids=input_ids,
         token_type_ids=None,            # None for test; 실제로는 segment id 입력
-        attention_mask=inputs['attention_mask'],
-        labels=inputs['labels'],
+        attention_mask=inputs['attention_mask'].to(device),
+        labels=inputs['labels'].to(device),
     )
     
     attr = generator.generate_attrscore(model_input)
@@ -111,10 +119,15 @@ def generate_visualization(
         
     cls_attr = attr[0]          # extract column for [CLS]
     cls_attr = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min())
-    print("cls_attr")
-    '''
-    example_token_id = [0] + (input_ids[i]*example_mask)[(input_ids[i]*example_mask).nonzero()]
-    tokens = [e for e in tokenizer.convert_ids_to_tokens(example_token_id)]
+    example_token_ids = input_ids.squeeze(0)[:5]
+    #[j for input_ids(i) != 1]
+    print(example_token_ids,"\n")
+    print(cls_attr,"\n")
+    
+    #example_token_id = [0] + (input_ids[i]*example_mask)[(input_ids[i]*example_mask).nonzero()]
+    tokens = [e for e in tokenizer.convert_ids_to_tokens(example_token_ids)]
+    tokens = [word.strip('Ġ') for word in tokens] 
+    print(tokens)
     vis_data_records = [visualization.VisualizationDataRecord(cls_attr,
                                                         1,
                                                         1,
@@ -125,9 +138,9 @@ def generate_visualization(
                                                         1)]
     html = visualization.visualize_text(vis_data_records)
     
-    with open(f"{args.output_dir}/visualize.html", "a") as h:
+    with open(f"{args.output_dir}/visualize.html", "a+") as h:
         h.write(html.data)
-    '''
+    
 
 if __name__ == "__main__":
     main()

@@ -7,8 +7,7 @@ export DATA_DIR=/home/jovyan/work/datasets
 export TASK_NAME=$1
 export LAYER_STRATEGY=$3
 
-#CUDA_VISIBLE_DEVICES=$2 
-python attrscore_visualize.py \
+CUDA_VISIBLE_DEVICES=$2 python attrscore_visualize.py \
 --model_name_or_path roberta-base \
 --task_name $TASK_NAME \
 --data_dir $GLUE_DIR/$TASK_NAME \
