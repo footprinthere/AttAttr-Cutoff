@@ -11,15 +11,15 @@ sys.path.append(".")
 from captum.attr import visualization
 
 
-from attattr.model_input import ModelInput
+from attattr import AttrScoreGenerator, ModelInput
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
 from transformers_cutoff import RobertaConfig, AutoTokenizer
 # from modeling_roberta import RobertaForSequenceClassification
-from transformers_cutoff.training_args import TrainingArguments
-from transformers_cutoff.modeling_utils import PreTrainedModel
-from transformers_cutoff.data.processors.glue import glue_convert_examples_to_features, glue_output_modes, glue_processors
-from transformers_cutoff.data.data_collator import DefaultDataCollator
+from transformers_cutoff import TrainingArguments
+from transformers_cutoff import PreTrainedModel
+from transformers_cutoff import glue_convert_examples_to_features, glue_output_modes, glue_processors
+from transformers_cutoff import DefaultDataCollator
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from attrscore_generator import AttrScoreGenerator
