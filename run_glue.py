@@ -244,7 +244,6 @@ def main():
     
     elif training_args.do_predict:
         
-        checkpoint_aug_type = "checkpoint_token" if training_args.aug_type == "token_cutoff" else "checkpoint_span"
         orig_task_name = data_args.task_name.upper()
         
         if orig_task_name == "COLA":
@@ -253,13 +252,13 @@ def main():
         logger.info(f"Loading saved model from {model_args.saved_dir}")
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.saved_dir,
-            config = config,
+            config=config,
         )
         test_dataset = test_dataset_class(data_args, tokenizer = tokenizer)
         trainer = Trainer(
-            model = model,
-            args = training_args,
-            compute_metrics = compute_metrics
+            model=model,
+            args=training_args,
+            compute_metrics=compute_metrics
         )
         predictions, label_ids, metrics = trainer.predict(test_dataset)
         logger.info("****** Prediction Result *******")
