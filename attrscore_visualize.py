@@ -119,7 +119,8 @@ def generate_visualization(
         
     cls_attr = attr[0]          # extract column for [CLS]
     cls_attr = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min())
-    example_token_ids = input_ids.squeeze(0)[:5]
+    input_ids = input_ids.squeeze(0)
+    example_token_ids = input_ids[(input_ids != 1).nonzero(as_tuple=True)]
     #[j for input_ids(i) != 1]
     print(example_token_ids,"\n")
     print(cls_attr,"\n")
@@ -137,7 +138,8 @@ def generate_visualization(
                                                         tokens,
                                                         1)]
     html = visualization.visualize_text(vis_data_records)
-    
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
     with open(f"{args.output_dir}/visualize.html", "a+") as h:
         h.write(html.data)
     
