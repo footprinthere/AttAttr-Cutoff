@@ -10,9 +10,6 @@ sys.path.append(".")
 
 from captum.attr import visualization
 
-
-from attattr import AttrScoreGenerator, ModelInput
-
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
 from transformers_cutoff import RobertaConfig, AutoTokenizer
 # from modeling_roberta import RobertaForSequenceClassification
@@ -22,10 +19,13 @@ from transformers_cutoff import glue_convert_examples_to_features, glue_output_m
 from transformers_cutoff import DefaultDataCollator
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
-from attrscore_generator import AttrScoreGenerator
+
+from attattr import AttrScoreGenerator, ModelInput
+print(__name__)
 
 
 def main():
+    print("main")
     tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name_or_path', type=str, default='roberta-base')
@@ -37,6 +37,7 @@ def main():
     args = parser.parse_args()
 
     data_args = GlueDataTrainingArguments()
+    args.task_name = args.task_name.lower()
     data_args.task_name = args.task_name
     data_args.data_dir = args.data_dir
     train_dataset = GlueDataset(data_args, tokenizer)
@@ -58,6 +59,7 @@ def main():
         task_name=args.task_name,
         model_file=f'/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin',
     )
+    print("itr")
     itr = iter(data_loader)
     while True:
         try:
@@ -126,3 +128,6 @@ def generate_visualization(
     with open(f"{args.output_dir}/visualize.html", "a") as h:
         h.write(html.data)
     '''
+
+if __name__ == "__main__":
+    main()
