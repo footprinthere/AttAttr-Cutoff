@@ -21,15 +21,11 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
 from attattr import AttrScoreGenerator, ModelInput
-print(__name__)
 
 
 def main():
-    print("main")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
     
-
     tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name_or_path', type=str, default='roberta-base')
