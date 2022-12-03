@@ -11,7 +11,7 @@ export BATCH_SIZE=16
 
 export PYTHONPAHT=`pwd`
 
-if [ "$3" == "weak" ]; then
+if [ "$3" = "weak" ]; then
   export CUTOFF_RATIO=0.05
 else
   export CUTOFF_RATIO=0.1
@@ -26,7 +26,7 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --evaluate_during_training \
   --do_aug \
   --aug_type token_cutoff \
-  --aug_cutoff_ratio 0.05 \
+  --aug_cutoff_ratio $CUTOFF_RATIO \
   --aug_ce_loss 1.0 \
   --aug_js_loss 1.0 \
   --learning_rate 5e-6 \

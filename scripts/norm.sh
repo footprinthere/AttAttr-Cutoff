@@ -14,7 +14,7 @@ else
   export PLUS_OPTION=""
 fi
 
-if [ "$4" == "weak" ]; then
+if [ "$4" = "weak" ]; then
   export CUTOFF_RATIO=0.05
 else
   export CUTOFF_RATIO=0.1
@@ -31,7 +31,7 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --evaluate_during_training \
   --do_aug \
   --aug_type token_cutoff \
-  --aug_cutoff_ratio 0.1 \
+  --aug_cutoff_ratio $CUTOFF_RATIO \
   --min_cutoff_length 1 \
   ${PLUS_OPTION} \
   --attr_layer_strategy normalize \
@@ -43,4 +43,4 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --save_steps 500 \
   --save_total_limits 5 \
   --per_gpu_train_batch_size $BATCH_SIZE \
-  --output_dir results/${TASK_NAME}-${3}cutoff-attattr${SUFFIX}
+  --output_dir results/${TASK_NAME}-${4}cutoff-attattr${SUFFIX}
