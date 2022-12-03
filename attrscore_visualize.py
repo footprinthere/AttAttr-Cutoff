@@ -11,11 +11,11 @@ sys.path.append(".")
 from captum.attr import visualization
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
-from transformers_cutoff import RobertaConfig, AutoTokenizer
+# from transformers_cutoff import RobertaConfig, AutoTokenizer
 # from modeling_roberta import RobertaForSequenceClassification
-from transformers_cutoff import TrainingArguments
-from transformers_cutoff import PreTrainedModel
-from transformers_cutoff import glue_convert_examples_to_features, glue_output_modes, glue_processors
+# from transformers_cutoff import TrainingArguments
+# from transformers_cutoff import PreTrainedModel
+# from transformers_cutoff import glue_convert_examples_to_features, glue_output_modes, glue_processors
 from transformers_cutoff import DefaultDataCollator
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
@@ -24,7 +24,9 @@ from attattr import AttrScoreGenerator, ModelInput
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available.")
+    device = 'cuda'
     
     tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     parser = argparse.ArgumentParser()
@@ -68,7 +70,7 @@ def main():
             generate_visualization(inputs, generator, args, device,tokenizer)
         except StopIteration:
             break
-    inputs = itr.next()
+    
 
     
     
@@ -79,6 +81,7 @@ def generate_visualization(
     device,
     tokenizer,
 ):
+    print(inputs)
     input_ids=inputs['input_ids'].to(device)
     model_input = ModelInput(
         input_ids=input_ids,
@@ -114,18 +117,18 @@ def generate_visualization(
         raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {args.attr_layer_strategy}")
         
     cls_attr = attr[0]          # extract column for [CLS]
-    cls_attr = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min())
+    expl = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min())
     input_ids = input_ids.squeeze(0)
-    example_token_ids = input_ids[(input_ids != 1).nonzero(as_tuple=True)]
-    #[j for input_ids(i) != 1]
+    example_token_ids = input_ids[:model_input.input_len]
+
     print(example_token_ids,"\n")
     print(cls_attr,"\n")
     
-    #example_token_id = [0] + (input_ids[i]*example_mask)[(input_ids[i]*example_mask).nonzero()]
     tokens = [e for e in tokenizer.convert_ids_to_tokens(example_token_ids)]
     tokens = [word.strip('Ġ') for word in tokens] 
     print(tokens)
-    vis_data_records = [visualization.VisualizationDataRecord(cls_attr,
+    vis_data_records = [visualization.VisualizationDataRecord(
+                                                        expl,
                                                         1,
                                                         1,
                                                         1,
@@ -136,8 +139,11 @@ def generate_visualization(
     html = visualization.visualize_text(vis_data_records)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    with open(f"{args.output_dir}/visualize.html", "a+") as h:
+    with open(f"{args.output_dir}/{args.task_name}-{args.attr_layer_strategy}-visualize.html", "a") as h:
         h.write(html.data)
+        h.write("expl: ")
+        h.write(str(expl.tolist()))
+        h.write("<br>")
     
 
 if __name__ == "__main__":
