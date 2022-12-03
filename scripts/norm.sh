@@ -14,6 +14,12 @@ else
   export PLUS_OPTION=""
 fi
 
+if [ "$4" == "weak" ]; then
+  export CUTOFF_RATIO=0.05
+else
+  export CUTOFF_RATIO=0.1
+fi
+
 export PYTHONPAHT=`pwd`
 
 CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
@@ -37,4 +43,4 @@ CUDA_VISIBLE_DEVICES=$2 python run_glue.py \
   --save_steps 500 \
   --save_total_limits 5 \
   --per_gpu_train_batch_size $BATCH_SIZE \
-  --output_dir results/${TASK_NAME}-cutoff-attattr${SUFFIX}
+  --output_dir results/${TASK_NAME}-${3}cutoff-attattr${SUFFIX}
