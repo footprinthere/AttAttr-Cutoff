@@ -61,12 +61,10 @@ def main():
         task_name=args.task_name,
         model_file=f'/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin',
     )
-    print("itr")
     itr = iter(data_loader)
     while True:
         try:
             inputs = next(itr)
-            #print(inputs)
             generate_visualization(inputs, generator, args, device,tokenizer)
         except StopIteration:
             break
@@ -81,11 +79,10 @@ def generate_visualization(
     device,
     tokenizer,
 ):
-    print(inputs)
     input_ids=inputs['input_ids'].to(device)
     model_input = ModelInput(
         input_ids=input_ids,
-        token_type_ids=None,            # None for test; 실제로는 segment id 입력
+        token_type_ids=inputs.get('token_type_ids', None),            # None for test; 실제로는 segment id 입력
         attention_mask=inputs['attention_mask'].to(device),
         labels=inputs['labels'].to(device),
     )
@@ -117,16 +114,19 @@ def generate_visualization(
         raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {args.attr_layer_strategy}")
         
     cls_attr = attr[0]          # extract column for [CLS]
-    expl = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min())
+    #print("original cls_attr", cls_attr)
+    expl = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min()) * 2 # range: [0,2]
+    expl = torch.exp(expl) # range: [1,e^2]
+    expl = torch.exp(expl) # range: [e,e^(e^2)]
+    expl = (expl - expl.min()) / (expl.max() - expl.min()) # range: [0,1]
+    #print("normalized cls_attr", expl)
     input_ids = input_ids.squeeze(0)
     example_token_ids = input_ids[:model_input.input_len]
-
-    print(example_token_ids,"\n")
-    print(cls_attr,"\n")
     
     tokens = [e for e in tokenizer.convert_ids_to_tokens(example_token_ids)]
     tokens = [word.strip('Ġ') for word in tokens] 
-    print(tokens)
+    tokens = [word.replace('<s>', '[CLS/BOS]') for word in tokens]
+    tokens = [word.replace('</s>', '[SEP/EOS]') for word in tokens]
     vis_data_records = [visualization.VisualizationDataRecord(
                                                         expl,
                                                         1,
@@ -141,10 +141,9 @@ def generate_visualization(
         os.makedirs(args.output_dir)
     with open(f"{args.output_dir}/{args.task_name}-{args.attr_layer_strategy}-visualize.html", "a") as h:
         h.write(html.data)
-        h.write("expl: ")
-        h.write(str(expl.tolist()))
+        h.write("cls_attr: ")
+        h.write(str([(tokens[i], cls_attr[i].item()) for i in range(len(tokens))]))
         h.write("<br>")
     
-
 if __name__ == "__main__":
     main()
