@@ -11,11 +11,6 @@ sys.path.append(".")
 from captum.attr import visualization
 
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
-# from transformers_cutoff import RobertaConfig, AutoTokenizer
-# from modeling_roberta import RobertaForSequenceClassification
-# from transformers_cutoff import TrainingArguments
-# from transformers_cutoff import PreTrainedModel
-# from transformers_cutoff import glue_convert_examples_to_features, glue_output_modes, glue_processors
 from transformers_cutoff import DefaultDataCollator
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
@@ -31,6 +26,7 @@ def main():
     tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name_or_path', type=str, default='roberta-base')
+    parser.add_argument('--score_strategy', type=str, default='attattr')
     parser.add_argument('--attr_layer_strategy', type=str, default='max')
     parser.add_argument('--attr_mean_of_last_layers', type=int, default=2)
     parser.add_argument('--task_name', type=str, default=None)
@@ -52,32 +48,36 @@ def main():
         sampler=train_sampler,
         collate_fn=collator.collate_batch,
     )
+    itr = iter(data_loader)
     
     task_dir = args.task_name.upper()
     if task_dir == "COLA":
         task_dir = "CoLA"
-    generator = AttrScoreGenerator(
-        model_name=args.model_name_or_path,
-        task_name=args.task_name,
-        model_file=f'/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin',
-    )
-    itr = iter(data_loader)
-    while True:
-        try:
-            inputs = next(itr)
-            generate_visualization(inputs, generator, args, device,tokenizer)
-        except StopIteration:
-            break
+        
+    if args.score_strategy == "attattr":
+        generator = AttrScoreGenerator(
+            model_name=args.model_name_or_path,
+            task_name=args.task_name,
+            model_file=f'/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin',
+        )
+        while True:
+            try:
+                inputs = next(itr)
+                cls_attr, example_token_ids = attattr_score(inputs, generator, args, device)
+                generate_visualization(cls_attr, example_token_ids, args, tokenizer)
+            except StopIteration:
+                break
+    elif args.score_strategy == "transexp":
+        ### TODO: need score from transexp
+        generate_visualization(cls_attr, example_token_ids, args, tokenizer)
+    else: raise ValueError(f"'score_strategy' must be one of ['attattr', 'transexp']; Got {args.score_strategy}")
     
-
     
-    
-def generate_visualization(
+def attattr_score(
     inputs,
     generator: AttrScoreGenerator,
     args,
     device,
-    tokenizer,
 ):
     input_ids=inputs['input_ids'].to(device)
     model_input = ModelInput(
@@ -114,19 +114,38 @@ def generate_visualization(
         raise ValueError(f"'attr_layer_strategy' must be one of ['max', 'mean', 'normalize']; Got {args.attr_layer_strategy}")
         
     cls_attr = attr[0]          # extract column for [CLS]
-    #print("original cls_attr", cls_attr)
-    expl = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min()) * 2 # range: [0,2]
-    expl = torch.exp(expl) # range: [1,e^2]
-    expl = torch.exp(expl) # range: [e,e^(e^2)]
-    expl = (expl - expl.min()) / (expl.max() - expl.min()) # range: [0,1]
-    #print("normalized cls_attr", expl)
     input_ids = input_ids.squeeze(0)
     example_token_ids = input_ids[:model_input.input_len]
+    return cls_attr, example_token_ids
+
+def transexp_score(
+    inputs,
+    args,
+    device,
+):
+    cls_attr = None
+    example_token_ids = None
+    return cls_attr, example_token_ids
+    
+def generate_visualization(
+    cls_attr,
+    example_token_ids,
+    args,
+    tokenizer,
+):
+    
+    #print("original cls_attr", cls_attr)
+    expl = (cls_attr.max() - cls_attr) / (cls_attr.max() - cls_attr.min()) * 2.5 # range: [0,2.5]
+    expl = torch.exp(expl) - 1 # range: [0,e^2.5-1]
+    expl = torch.exp(expl) # range: [1,e^(e^2.5-1)]
+    expl = (expl - expl.min()) / (expl.max() - expl.min()) # range: [0,1]
+    #print("normalized cls_attr", expl)
     
     tokens = [e for e in tokenizer.convert_ids_to_tokens(example_token_ids)]
     tokens = [word.strip('Ġ') for word in tokens] 
     tokens = [word.replace('<s>', '[CLS/BOS]') for word in tokens]
     tokens = [word.replace('</s>', '[SEP/EOS]') for word in tokens]
+    
     vis_data_records = [visualization.VisualizationDataRecord(
                                                         expl,
                                                         1,
@@ -139,7 +158,9 @@ def generate_visualization(
     html = visualization.visualize_text(vis_data_records)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    with open(f"{args.output_dir}/{args.task_name}-{args.attr_layer_strategy}-visualize.html", "a") as h:
+    if args.score_strategy == "attattr": output_file = f"{args.output_dir}/{args.task_name}-{args.score_strategy}-{args.attr_layer_strategy}-visualize.html"
+    else: output_file = f"{args.output_dir}/{args.task_name}-{args.score_strategy}-visualize.html"
+    with open(output_file, "a") as h:
         h.write(html.data)
         h.write("cls_attr: ")
         h.write(str([(tokens[i], cls_attr[i].item()) for i in range(len(tokens))]))
