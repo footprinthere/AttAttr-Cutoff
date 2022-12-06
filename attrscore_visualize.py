@@ -1,9 +1,13 @@
 import sys
 import os
 import argparse
+from pathlib import Path
+
 import torch
 import numpy as np
 from typing import List
+from tqdm import tqdm
+
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append("..")
 sys.path.append(".")
@@ -16,6 +20,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 
 from attattr import AttrScoreGenerator, ModelInput
+from transexp_orig.ExplanationGenerator import Generator
+import save_attr_npy
 
 
 def main():
@@ -30,14 +36,15 @@ def main():
     parser.add_argument('--attr_layer_strategy', type=str, default='max')
     parser.add_argument('--attr_mean_of_last_layers', type=int, default=2)
     parser.add_argument('--task_name', type=str, default=None)
-    parser.add_argument('--data_dir', type=str, default=None)
+    parser.add_argument('--data_dir', type=Path, default=Path('/home/jovyan/work/datasets'))
+    parser.add_argument('--pretrain_dir', type=Path, default=Path('/home/jovyan/work/checkpoint'))
     parser.add_argument('--output_dir', type=str, default='visualize_results/')
     args = parser.parse_args()
 
     data_args = GlueDataTrainingArguments()
     args.task_name = args.task_name.lower()
     data_args.task_name = args.task_name
-    data_args.data_dir = args.data_dir
+    data_args.data_dir = f'/home/jovyan/work/datasets/{args.task_name}'
     train_dataset = GlueDataset(data_args, tokenizer)
 
     train_sampler = RandomSampler(train_dataset)
@@ -69,7 +76,14 @@ def main():
                 break
     elif args.score_strategy == "transexp":
         ### TODO: need score from transexp
-        generate_visualization(cls_attr, example_token_ids, args, tokenizer)
+        model, features = save_attr_npy.get_model_and_data(save_attr_npy.get_task_name(args.task_name), tokenizer, args)
+        explanations = Generator(model)
+        for i in tqdm(range(len(features))):
+            input_ids = torch.tensor(features[i].input_ids, dtype=int).reshape(1,-1).cuda()
+            attention_masks = torch.tensor(features[i].attention_mask, dtype=torch.float32).reshape(1,-1).cuda()
+            input_len = int(torch.sum(attention_masks, dim=1))
+            expl, example_token_ids = transexp_score(explanations, input_ids, input_len, attention_masks)
+            generate_visualization(expl, example_token_ids, args, tokenizer)
     else: raise ValueError(f"'score_strategy' must be one of ['attattr', 'transexp']; Got {args.score_strategy}")
     
     
@@ -119,13 +133,17 @@ def attattr_score(
     return cls_attr, example_token_ids
 
 def transexp_score(
-    inputs,
-    args,
-    device,
+    explanations,
+    input_ids,
+    input_len,
+    attention_mask,
 ):
-    cls_attr = None
-    example_token_ids = None
-    return cls_attr, example_token_ids
+    example_token_ids = input_ids[0][:input_len]
+    expl = explanations.generate_LRP(input_ids=input_ids, attention_mask=attention_mask, start_layer=0)[0]
+    expl = expl[:input_len]
+    expl[0] = expl.max()
+
+    return expl, example_token_ids
     
 def generate_visualization(
     cls_attr,
