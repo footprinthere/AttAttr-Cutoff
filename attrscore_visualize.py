@@ -17,7 +17,6 @@ from captum.attr import visualization
 from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
 from transformers_cutoff import DefaultDataCollator
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler
 
 from attattr import AttrScoreGenerator, ModelInput
 from transexp_orig.ExplanationGenerator import Generator
@@ -40,42 +39,41 @@ def main():
     parser.add_argument('--pretrain_dir', type=Path, default=Path('/home/jovyan/work/checkpoint'))
     parser.add_argument('--output_dir', type=str, default='visualize_results/')
     args = parser.parse_args()
-
-    data_args = GlueDataTrainingArguments()
-    args.task_name = args.task_name.lower()
-    data_args.task_name = args.task_name
-    data_args.data_dir = f'/home/jovyan/work/datasets/{args.task_name}'
-    train_dataset = GlueDataset(data_args, tokenizer)
-
-    train_sampler = RandomSampler(train_dataset)
-    collator = DefaultDataCollator()
-    data_loader = DataLoader(
-        train_dataset,
-        batch_size=1,
-        sampler=train_sampler,
-        collate_fn=collator.collate_batch,
-    )
-    itr = iter(data_loader)
-    
-    task_dir = args.task_name.upper()
-    if task_dir == "COLA":
-        task_dir = "CoLA"
-        
+     
     if args.score_strategy == "attattr":
+        data_args = GlueDataTrainingArguments()
+        args.task_name = args.task_name.lower()
+        data_args.task_name = args.task_name
+        data_args.data_dir = f'/home/jovyan/work/datasets/{args.task_name}'
+        train_dataset = GlueDataset(data_args, tokenizer)
+
+        collator = DefaultDataCollator()
+        data_loader = DataLoader(
+            train_dataset,
+            batch_size=1,
+            collate_fn=collator.collate_batch,
+        )
+        itr = iter(data_loader)
+        task_dir = args.task_name.upper()
+        if task_dir == "COLA":
+            task_dir = "CoLA"
         generator = AttrScoreGenerator(
             model_name=args.model_name_or_path,
             task_name=args.task_name,
             model_file=f'/home/jovyan/work/checkpoint/{task_dir}/checkpoint_token/pytorch_model.bin',
         )
-        while True:
+        for i in tqdm(range(len(data_loader))):
+            inputs = next(itr)
+            cls_attr, example_token_ids = attattr_score(inputs, generator, args, device)
+            generate_visualization(cls_attr, example_token_ids, args, tokenizer)
+        '''while True:
             try:
                 inputs = next(itr)
                 cls_attr, example_token_ids = attattr_score(inputs, generator, args, device)
                 generate_visualization(cls_attr, example_token_ids, args, tokenizer)
             except StopIteration:
-                break
+                break'''
     elif args.score_strategy == "transexp":
-        ### TODO: need score from transexp
         model, features = save_attr_npy.get_model_and_data(save_attr_npy.get_task_name(args.task_name), tokenizer, args)
         explanations = Generator(model)
         for i in tqdm(range(len(features))):
@@ -120,7 +118,9 @@ def attattr_score(
         attr = attr.mean(dim=0)                     # mean along layer dimension
     
     elif args.attr_layer_strategy == "normalize":
+        print("attr.mean",attr.mean(dim=0))
         attr = torch.sub(attr, attr.mean(dim=0))
+        print("attr.var",attr.var(dim=0))
         attr = torch.div(attr, attr.var(dim=0))
         attr = attr.max(dim=0).values               # max along layer dimension
 
@@ -176,11 +176,10 @@ def generate_visualization(
     html = visualization.visualize_text(vis_data_records)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    if args.score_strategy == "attattr": output_file = f"{args.output_dir}/{args.task_name}-{args.score_strategy}-{args.attr_layer_strategy}-visualize.html"
+    if args.score_strategy == "attattr": output_file = f"{args.output_dir}/{save_attr_npy.get_task_name(args.task_name)}-{args.score_strategy}-{args.attr_layer_strategy}-visualize.html"
     else: output_file = f"{args.output_dir}/{args.task_name}-{args.score_strategy}-visualize.html"
     with open(output_file, "a") as h:
         h.write(html.data)
-        h.write("cls_attr: ")
         h.write(str([(tokens[i], cls_attr[i].item()) for i in range(len(tokens))]))
         h.write("<br>")
     
