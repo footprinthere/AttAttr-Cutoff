@@ -263,6 +263,10 @@ class Trainer:
         self.saved_cutoff_idx.fill(-1)
         logger.info("Initialized numpy array for index caching")
 
+    def _save_cutoff_index_array(self):
+        path = os.path.join(self.args.output_dir, f"cutoff_indices_{self.args.attr_layer_strategy}_{self.args.aug_cutoff_ratio}")
+        np.save(path, self.saved_cutoff_idx)
+
     def _initialize_special_token_ids(self):
         t: RobertaTokenizer = self.train_dataset.tokenizer
         self.special_token_ids = (
@@ -530,6 +534,11 @@ class Trainer:
 
         self.eval_history = []
         for epoch in train_iterator:
+            
+            if epoch == 1:
+                # Save cutoff index array after the first epoch
+                self._save_cutoff_index_array()
+
             if isinstance(train_dataloader, DataLoader) and isinstance(train_dataloader.sampler, DistributedSampler):
                 train_dataloader.sampler.set_epoch(epoch)
 
