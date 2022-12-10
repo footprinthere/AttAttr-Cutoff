@@ -3,14 +3,11 @@ import logging
 import argparse
 
 import torch
-from torch.utils.data import DataLoader
 
 import numpy as np
 from tqdm import tqdm
 
-from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
-from transformers_cutoff.data.data_collator import DefaultDataCollator
-from transformers_cutoff import InputFeatures
+from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments, InputFeatures
 
 from attattr import AttrScoreGenerator, ModelInput
 
@@ -48,13 +45,6 @@ def main():
     data_args.data_dir = f'/home/jovyan/work/datasets/{args.task_name}'
     train_dataset = GlueDataset(data_args, tokenizer)
 
-    # collator = DefaultDataCollator()
-    # data_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     collate_fn=collator.collate_batch,
-    # )
     logger.info("Data prepared")
 
     # Construct Generator
@@ -91,7 +81,6 @@ def main():
                 for array in np_arrays:
                     logger.info(array[i-1])
         
-        # data.pop("example_index")
         cutoff_indices = get_cutoff_indices(generator, data, args)
         for array, indices in zip(np_arrays, cutoff_indices):
             array[data.example_index, :len(indices)] = indices
