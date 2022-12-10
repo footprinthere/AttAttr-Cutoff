@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--save_dir', type=str, default='./')
     parser.add_argument('--save_period', type=int, default=500)
     parser.add_argument('--attr_layer_strategy', choices=['max', 'normalize'], default='norm')
+    parser.add_argument('--model_max_length', type=int, default=128)
     args = parser.parse_args()
 
     if not os.path.isdir(os.path.join(args.save_dir, "temp")):
@@ -64,7 +65,7 @@ def main():
         logger.info(f"Resumed from saved npy files; Shape: {np_arrays[0].shape}, {np_arrays[1].shape}")
     else:
         for ratio in CUTOFF_RATIO:
-            max_cutoff_length = int(tokenizer.max_len * ratio)
+            max_cutoff_length = int(args.model_max_length * ratio)
             array = np.zeros((len(train_dataset), max_cutoff_length))
             array.fill(-1)
             np_arrays.append(array)
