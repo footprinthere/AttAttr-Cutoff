@@ -723,7 +723,11 @@ class Trainer:
 
         # Iterate on each example in batch
         batch_size = batch_embeds.size(0)
-        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
+        if epoch == 0 and self.args.use_saved_cutoff_indices is None:
+            batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        else:
+            batch_iterator = range(batch_size)
+            
         for i in batch_iterator:
             example_index = example_indices[i]
             example_embed = batch_embeds[i]
