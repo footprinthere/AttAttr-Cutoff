@@ -268,8 +268,8 @@ class Trainer:
             self.saved_cutoff_idx = np.load(self.args.use_saved_cutoff_indices)
             logger.info(f"Loaded numpy array for index caching from {self.args.use_saved_cutoff_indices}")
             max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
-            assert self.saved_cutoff.shape[1] == max_cutoff_length, (
-                f"Loaded np array has wrong shape: {self.saved_cutoff.shape[1]} != {max_cutoff_length}"
+            assert self.saved_cutoff_idx.shape[1] == max_cutoff_length, (
+                f"Loaded np array has wrong shape: {self.saved_cutoff_idx.shape[1]} != {max_cutoff_length}"
             )
 
     def _save_cutoff_index_array(self):
