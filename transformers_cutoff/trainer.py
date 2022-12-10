@@ -268,9 +268,9 @@ class Trainer:
             self.saved_cutoff_idx = np.load(self.args.use_saved_cutoff_indices)
             logger.info(f"Loaded numpy array for index caching from {self.args.use_saved_cutoff_indices}")
             max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
-            assert self.saved_cutoff_idx.shape[1] == max_cutoff_length, (
-                f"Loaded np array has wrong shape: {self.saved_cutoff_idx.shape[1]} != {max_cutoff_length}"
-            )
+            # assert self.saved_cutoff_idx.shape[1] == max_cutoff_length, (
+            #     f"Loaded np array has wrong shape: {self.saved_cutoff_idx.shape[1]} != {max_cutoff_length}"
+            # )
 
     def _save_cutoff_index_array(self):
         path = os.path.join(self.args.output_dir, f"cutoff_indices_{self.args.attr_layer_strategy}_{self.args.aug_cutoff_ratio}")
@@ -813,9 +813,11 @@ class Trainer:
 
             else:
                 # cutoff_indices already cached
+                cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
                 cutoff_indices = self.saved_cutoff_idx[example_index]
                 if -1 in cutoff_indices:
                     cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
+                cutoff_indices = cutoff_indices[:cutoff_length]
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
             zero_mask[cutoff_indices] = 0
