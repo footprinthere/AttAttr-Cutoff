@@ -3,14 +3,11 @@ import logging
 import argparse
 
 import torch
-from torch.utils.data import DataLoader
 
 import numpy as np
 from tqdm import tqdm
 
-from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments
-from transformers_cutoff.data.data_collator import DefaultDataCollator
-from transformers_cutoff import InputFeatures
+from transformers_cutoff import RobertaTokenizer, GlueDataset, GlueDataTrainingArguments, InputFeatures
 
 from attattr import AttrScoreGenerator, ModelInput
 
@@ -35,6 +32,7 @@ def main():
     parser.add_argument('--save_dir', type=str, default='./')
     parser.add_argument('--save_period', type=int, default=500)
     parser.add_argument('--attr_layer_strategy', choices=['max', 'normalize'], default='norm')
+    parser.add_argument('--model_max_length', type=int, default=128)
     args = parser.parse_args()
 
     if not os.path.isdir(os.path.join(args.save_dir, "temp")):
@@ -48,13 +46,6 @@ def main():
     data_args.data_dir = f'/home/jovyan/work/datasets/{args.task_name}'
     train_dataset = GlueDataset(data_args, tokenizer)
 
-    # collator = DefaultDataCollator()
-    # data_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     collate_fn=collator.collate_batch,
-    # )
     logger.info("Data prepared")
 
     # Construct Generator
@@ -74,7 +65,7 @@ def main():
         logger.info(f"Resumed from saved npy files; Shape: {np_arrays[0].shape}, {np_arrays[1].shape}")
     else:
         for ratio in CUTOFF_RATIO:
-            max_cutoff_length = int(tokenizer.max_len * ratio)
+            max_cutoff_length = int(args.model_max_length * ratio)
             array = np.zeros((len(train_dataset), max_cutoff_length))
             array.fill(-1)
             np_arrays.append(array)
@@ -91,7 +82,6 @@ def main():
                 for array in np_arrays:
                     logger.info(array[i-1])
         
-        # data.pop("example_index")
         cutoff_indices = get_cutoff_indices(generator, data, args)
         for array, indices in zip(np_arrays, cutoff_indices):
             array[data.example_index, :len(indices)] = indices

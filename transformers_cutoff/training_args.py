@@ -93,6 +93,7 @@ class TrainingArguments:
     attr_mean_of_last_layers: Optional[int] = field(default=None)       # valid only when attr_layer_strategy == "mean"
 
     resume_from_checkpoint: Optional[str] = field(default=None)
+    use_saved_cutoff_indices: Optional[str] = field(default=None)
     #################################################################################################
 
     logging_dir: Optional[str] = field(default=None, metadata={"help": "Tensorboard log dir."})
