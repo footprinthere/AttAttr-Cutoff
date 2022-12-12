@@ -737,11 +737,12 @@ class Trainer:
             example_embed = batch_embeds[i]
             example_mask = attention_mask[i]
 
+            cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
+            if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
+                # Force lower bound of cutoff_length
+                cutoff_length = self.args.min_cutoff_length
+
             if epoch == 0 and self.args.use_saved_cutoff_indices is None:
-                cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
-                if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
-                    # Force lower bound of cutoff_length
-                    cutoff_length = self.args.min_cutoff_length
                 assert cutoff_length <= self.saved_cutoff_idx.shape[1], (
                     "Problem while calculating the size of cache matrix: "
                     f"{cutoff_length} > {self.saved_cutoff_idx.shape[1]}"
@@ -813,7 +814,6 @@ class Trainer:
 
             else:
                 # cutoff_indices already cached
-                cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
                 cutoff_indices = self.saved_cutoff_idx[example_index]
                 if -1 in cutoff_indices:
                     cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
