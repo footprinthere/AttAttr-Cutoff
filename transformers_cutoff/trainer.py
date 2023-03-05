@@ -258,10 +258,19 @@ class Trainer:
         )
 
     def _initialize_cutoff_index_array(self, dataset_size: int):
-        max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
-        self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
-        self.saved_cutoff_idx.fill(-1)
-        logger.info("Initialized numpy array for index caching")
+        if self.args.use_saved_cutoff_indices is None:
+            max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
+            self.saved_cutoff_idx = np.zeros((dataset_size, max_cutoff_length))
+            self.saved_cutoff_idx.fill(-1)
+            logger.info("Initialized numpy array for index caching")
+        else:
+            # Load saved numpy file
+            self.saved_cutoff_idx = np.load(self.args.use_saved_cutoff_indices)
+            logger.info(f"Loaded numpy array for index caching from {self.args.use_saved_cutoff_indices}")
+            max_cutoff_length = int(self.args.max_seq_length * self.args.aug_cutoff_ratio)
+            # assert self.saved_cutoff_idx.shape[1] == max_cutoff_length, (
+            #     f"Loaded np array has wrong shape: {self.saved_cutoff_idx.shape[1]} != {max_cutoff_length}"
+            # )
 
     def _save_cutoff_index_array(self):
         path = os.path.join(self.args.output_dir, f"cutoff_indices_{self.args.attr_layer_strategy}_{self.args.aug_cutoff_ratio}")
@@ -535,7 +544,7 @@ class Trainer:
         self.eval_history = []
         for epoch in train_iterator:
             
-            if epoch == 1:
+            if epoch == 1 and self.args.use_saved_cutoff_indices is None:
                 # Save cutoff index array after the first epoch
                 self._save_cutoff_index_array()
 
@@ -718,17 +727,22 @@ class Trainer:
 
         # Iterate on each example in batch
         batch_size = batch_embeds.size(0)
-        batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True) if epoch == 0 else range(batch_size)
+        if epoch == 0 and self.args.use_saved_cutoff_indices is None:
+            batch_iterator = tqdm(range(batch_size), desc="batch", leave=False, ascii=True)
+        else:
+            batch_iterator = range(batch_size)
+
         for i in batch_iterator:
             example_index = example_indices[i]
             example_embed = batch_embeds[i]
             example_mask = attention_mask[i]
 
-            if epoch == 0:
-                cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
-                if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
-                    # Force lower bound of cutoff_length
-                    cutoff_length = self.args.min_cutoff_length
+            cutoff_length = int(input_lens[i] * self.args.aug_cutoff_ratio)
+            if self.args.min_cutoff_length is not None and cutoff_length < self.args.min_cutoff_length:
+                # Force lower bound of cutoff_length
+                cutoff_length = self.args.min_cutoff_length
+
+            if epoch == 0 and self.args.use_saved_cutoff_indices is None:
                 assert cutoff_length <= self.saved_cutoff_idx.shape[1], (
                     "Problem while calculating the size of cache matrix: "
                     f"{cutoff_length} > {self.saved_cutoff_idx.shape[1]}"
@@ -803,6 +817,7 @@ class Trainer:
                 cutoff_indices = self.saved_cutoff_idx[example_index]
                 if -1 in cutoff_indices:
                     cutoff_indices = cutoff_indices[: list(cutoff_indices).index(-1)]   # remove padding
+                cutoff_indices = cutoff_indices[:cutoff_length]
 
             zero_mask = torch.ones(example_embed.shape[0], ).to(self.args.device)
             zero_mask[cutoff_indices] = 0
